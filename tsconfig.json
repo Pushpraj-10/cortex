@@ -6,6 +6,7 @@
     { "path": "packages/llm" },
     { "path": "packages/tools" },
     { "path": "packages/prompts" },
+    { "path": "packages/context" },
     { "path": "packages/agent" }
   ]
 }

@@ -10,6 +10,14 @@ export interface ToolLoopDeps {
   executor: Executor;
   tools: ToolSpec[];
   maxIterations?: number;
+  /**
+   * Rendered context (from @cortex/context's gatherContext), appended as a trailing
+   * `user` message on every request. Never pushed into `history` itself — appending
+   * it there would leave a trail of stale, increasingly contradictory copies as a
+   * session goes on. Keeping exactly one, freshly computed, at the end also puts it
+   * where a small model actually attends.
+   */
+  contextBlock?: string;
 }
 
 /**
@@ -30,7 +38,10 @@ export async function* runToolLoop(
   const maxIterations = deps.maxIterations ?? DEFAULT_MAX_ITERATIONS;
 
   for (let iteration = 0; iteration < maxIterations; iteration += 1) {
-    const result = await deps.llm.chat({ messages: history, tools: deps.tools, signal });
+    const requestMessages = deps.contextBlock
+      ? [...history, { role: "user" as const, content: deps.contextBlock }]
+      : history;
+    const result = await deps.llm.chat({ messages: requestMessages, tools: deps.tools, signal });
 
     if (!result.ok) {
       yield { type: "message", content: `LLM request failed: ${result.error.message}` };

@@ -2,11 +2,18 @@
 import React from "react";
 import { render } from "ink";
 import { App } from "./App.js";
-import { loadDotEnv, registerFileSystemTools, registerLlmProviders, createCliAgentSession } from "./wiring/index.js";
+import {
+  loadDotEnv,
+  registerFileSystemTools,
+  registerLlmProviders,
+  registerContextProviders,
+  createCliAgentSession,
+} from "./wiring/index.js";
 
 loadDotEnv();
 registerFileSystemTools();
 registerLlmProviders();
+registerContextProviders();
 
 const cwd = process.cwd();
 const result = createCliAgentSession(cwd);

@@ -9,6 +9,7 @@
     { "path": "../llm" },
     { "path": "../tools" },
     { "path": "../prompts" },
+    { "path": "../context" },
   ],
   "include": ["src", "test"]
 }

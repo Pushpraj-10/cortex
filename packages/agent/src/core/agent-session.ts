@@ -1,5 +1,6 @@
 import { chatSystemTemplate } from "@cortex/prompts";
 import { listTools } from "@cortex/tools";
+import { gatherContext } from "@cortex/context";
 import type { ChatMessage } from "@cortex/llm";
 import type { AgentConfig, AgentEvent, AgentSession } from "../types.js";
 import { runToolLoop } from "./tool-loop.js";
@@ -19,6 +20,7 @@ export function createAgentSession(config: AgentConfig): AgentSession {
     async *chat(userInput: string, signal?: AbortSignal): AsyncGenerator<AgentEvent, void, void> {
       history.push({ role: "user", content: userInput });
       const tools = listTools().map(toToolSpec);
+      const contextBlock = await gatherContext({ workspaceRoot: config.workspaceRoot, userMessage: userInput, signal });
 
       yield* runToolLoop(
         history,
@@ -27,6 +29,7 @@ export function createAgentSession(config: AgentConfig): AgentSession {
           executor: config.executor,
           tools,
           maxIterations: config.maxIterations,
+          contextBlock: contextBlock || undefined,
         },
         signal,
       );

@@ -14,6 +14,7 @@
     "@cortex/llm": "*",
     "@cortex/tools": "*",
     "@cortex/prompts": "*",
+    "@cortex/context": "*",
     "@cortex/agent": "*"
   },
   "devDependencies": {

@@ -133,4 +133,50 @@ describe("runToolLoop", () => {
 
     expect(execute).toHaveBeenCalledWith("add_numbers", { a: 1, b: 2 }, controller.signal);
   });
+
+  it("appends contextBlock as a trailing user message on the request, without persisting it into history", async () => {
+    const chat = vi.fn().mockResolvedValue(ok({ role: "assistant", content: "hi" }));
+    const llm: LLMProvider = { chat };
+    const executor: Executor = { execute: vi.fn() };
+    const history: ChatMessage[] = [{ role: "user", content: "hi" }];
+
+    await collect(runToolLoop(history, { llm, executor, tools: [], contextBlock: "# Workspace Context\n\nsome info" }));
+
+    expect(chat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [{ role: "user", content: "hi" }, { role: "user", content: "# Workspace Context\n\nsome info" }],
+      }),
+    );
+    expect(history).toEqual([{ role: "user", content: "hi" }, { role: "assistant", content: "hi" }]);
+  });
+
+  it("appends contextBlock on every iteration of a multi-tool-call turn", async () => {
+    const llm = llmReturning(
+      ok({ role: "assistant", content: "", toolCalls: [{ toolName: "add_numbers", args: { a: 1, b: 2 } }] }),
+      ok({ role: "assistant", content: "done" }),
+    );
+    const chat = llm.chat as unknown as ReturnType<typeof vi.fn>;
+    const executor: Executor = { execute: vi.fn().mockResolvedValue(ok(3)) };
+    const history: ChatMessage[] = [{ role: "user", content: "add 1 and 2" }];
+
+    await collect(runToolLoop(history, { llm, executor, tools: [], contextBlock: "ctx" }));
+
+    expect(chat).toHaveBeenCalledTimes(2);
+    for (const call of chat.mock.calls) {
+      const messages = call[0].messages as ChatMessage[];
+      expect(messages.at(-1)).toEqual({ role: "user", content: "ctx" });
+    }
+    expect(history.some((m) => m.content === "ctx")).toBe(false);
+  });
+
+  it("behaves identically to today when contextBlock is omitted", async () => {
+    const chat = vi.fn().mockResolvedValue(ok({ role: "assistant", content: "hi" }));
+    const llm: LLMProvider = { chat };
+    const executor: Executor = { execute: vi.fn() };
+    const history: ChatMessage[] = [{ role: "user", content: "hi" }];
+
+    await collect(runToolLoop(history, { llm, executor, tools: [] }));
+
+    expect(chat).toHaveBeenCalledWith(expect.objectContaining({ messages: history }));
+  });
 });
