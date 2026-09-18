@@ -1,0 +1,20 @@
+{
+  "name": "@cortex/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "cortex": "./src/index.ts"
+  },
+  "dependencies": {
+    "@cortex/shared": "*",
+    "@cortex/agent": "*",
+    "@cortex/llm": "*",
+    "@cortex/tools": "*",
+    "@cortex/context": "*",
+    "@cortex/planner": "*",
+    "@cortex/prompts": "*",
+    "@cortex/storage": "*",
+    "@cortex/execution": "*"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@cortex/agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@cortex/shared": "*",
+    "@cortex/llm": "*",
+    "@cortex/tools": "*",
+    "@cortex/context": "*",
+    "@cortex/prompts": "*",
+    "@cortex/execution": "*",
+    "@cortex/planner": "*"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "cortex",
+  "version": "0.1.0",
+  "description": "A local-first CLI coding agent — works with local (Ollama) and cloud LLM providers.",
+  "type": "module",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "tsx apps/cli/src/index.ts",
+    "typecheck": "tsc --build",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.2",
+    "@types/node": "^22.7.4",
+    "vitest": "^5.0.1",
+    "tsx": "^4.19.1"
+  }
+}

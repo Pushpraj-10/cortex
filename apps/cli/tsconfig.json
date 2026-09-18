@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "rootDir": ".",
+    "outDir": "dist"
+  },
+  "references": [
+    { "path": "../../packages/shared" },
+    { "path": "../../packages/agent" },
+    { "path": "../../packages/llm" },
+    { "path": "../../packages/tools" },
+    { "path": "../../packages/prompts" },
+  ],
+  "include": ["src", "test"]
+}

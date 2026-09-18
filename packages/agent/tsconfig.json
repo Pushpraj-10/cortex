@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist"
+  },
+  "references": [
+    { "path": "../shared" },
+    { "path": "../llm" },
+    { "path": "../tools" },
+    { "path": "../prompts" },
+  ],
+  "include": ["src", "test"]
+}
