@@ -7,14 +7,11 @@
     "cortex": "./src/index.ts"
   },
   "dependencies": {
-    "@cortex/shared": "*",
-    "@cortex/agent": "*",
-    "@cortex/llm": "*",
-    "@cortex/tools": "*",
-    "@cortex/context": "*",
-    "@cortex/planner": "*",
-    "@cortex/prompts": "*",
-    "@cortex/storage": "*",
-    "@cortex/execution": "*"
+    "ink": "^5.0.1",
+    "react": "^18.3.1",
+    "tsx": "^4.19.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3"
   }
 }
