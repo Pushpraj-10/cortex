@@ -9,7 +9,12 @@
   "dependencies": {
     "ink": "^5.0.1",
     "react": "^18.3.1",
-    "tsx": "^4.19.1"
+    "tsx": "^4.19.1",
+    "@cortex/shared": "*",
+    "@cortex/llm": "*",
+    "@cortex/tools": "*",
+    "@cortex/prompts": "*",
+    "@cortex/agent": "*"
   },
   "devDependencies": {
     "@types/react": "^18.3.3"

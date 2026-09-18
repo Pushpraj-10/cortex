@@ -1,10 +1,10 @@
 import React from "react";
 import { Box, Text } from "ink";
 import { colors } from "../theme.js";
-import type { ToolCallData } from "../types.js";
+import type { ToolCallEntry } from "../types.js";
 
 interface ToolCallBlockProps {
-  data: ToolCallData;
+  data: ToolCallEntry;
   expanded: boolean;
 }
 
@@ -16,7 +16,7 @@ interface ToolCallBlockProps {
  */
 export function ToolCallBlock({ data, expanded }: ToolCallBlockProps) {
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" marginBottom={1}>
       <Text>
         <Text color={colors.accent}>{expanded ? "⏺" : "●"}</Text> {data.summary}
       </Text>

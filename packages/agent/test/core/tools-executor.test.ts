@@ -36,4 +36,23 @@ describe("createToolsExecutor", () => {
     const executor = createToolsExecutor("/workspace");
     await expect(executor.execute("executor-test-nonexistent", {})).rejects.toThrow();
   });
+
+  it("passes the given signal through to the tool handler's context", async () => {
+    let capturedSignal: AbortSignal | undefined;
+    registerTool({
+      name: "executor-test-signal",
+      description: "Captures the signal it was called with",
+      parametersSchema: { type: "object" },
+      handler: async (_args, context) => {
+        capturedSignal = context.signal;
+        return ok(null);
+      },
+    });
+
+    const executor = createToolsExecutor("/workspace");
+    const controller = new AbortController();
+    await executor.execute("executor-test-signal", {}, controller.signal);
+
+    expect(capturedSignal).toBe(controller.signal);
+  });
 });

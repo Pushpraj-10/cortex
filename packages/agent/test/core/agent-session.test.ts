@@ -65,4 +65,16 @@ describe("createAgentSession", () => {
 
     expect(events).toEqual([{ type: "message", content: "the answer" }]);
   });
+
+  it("passes the given signal through to the underlying tool loop", async () => {
+    const { llm } = llmReturning(ok({ role: "assistant", content: "hi" }));
+    const chat = llm.chat as unknown as ReturnType<typeof vi.fn>;
+    const executor: Executor = { execute: vi.fn() };
+    const session = createAgentSession({ llm, executor, workspaceRoot: "/repo" });
+    const controller = new AbortController();
+
+    await collect(session.chat("hello", controller.signal));
+
+    expect(chat).toHaveBeenCalledWith(expect.objectContaining({ signal: controller.signal }));
+  });
 });

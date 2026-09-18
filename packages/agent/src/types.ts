@@ -3,7 +3,7 @@ import type { LLMProvider } from "@cortex/llm";
 
 /** Runs a single tool call by name. Wraps whatever tool-running strategy the composition root wires in. */
 export interface Executor {
-  execute(toolName: string, args: unknown): Promise<Result<unknown>>;
+  execute(toolName: string, args: unknown, signal?: AbortSignal): Promise<Result<unknown>>;
 }
 
 export type AgentEvent =
@@ -20,5 +20,5 @@ export interface AgentConfig {
 }
 
 export interface AgentSession {
-  chat(userInput: string): AsyncGenerator<AgentEvent, void, void>;
+  chat(userInput: string, signal?: AbortSignal): AsyncGenerator<AgentEvent, void, void>;
 }

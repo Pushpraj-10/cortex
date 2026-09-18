@@ -25,11 +25,12 @@ export interface ToolLoopDeps {
 export async function* runToolLoop(
   history: ChatMessage[],
   deps: ToolLoopDeps,
+  signal?: AbortSignal,
 ): AsyncGenerator<AgentEvent, void, void> {
   const maxIterations = deps.maxIterations ?? DEFAULT_MAX_ITERATIONS;
 
   for (let iteration = 0; iteration < maxIterations; iteration += 1) {
-    const result = await deps.llm.chat({ messages: history, tools: deps.tools });
+    const result = await deps.llm.chat({ messages: history, tools: deps.tools, signal });
 
     if (!result.ok) {
       yield { type: "message", content: `LLM request failed: ${result.error.message}` };
@@ -50,7 +51,7 @@ export async function* runToolLoop(
     // action per turn, so the model sees its real result before deciding the next one.
     yield { type: "toolCall", toolName: call.toolName, args: call.args };
 
-    const output = await deps.executor.execute(call.toolName, call.args);
+    const output = await deps.executor.execute(call.toolName, call.args, signal);
     const toolResultContent = output.ok ? output.value : { error: output.error.message };
     yield { type: "toolResult", toolName: call.toolName, output: toolResultContent };
 

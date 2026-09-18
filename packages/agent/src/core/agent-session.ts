@@ -16,16 +16,20 @@ export function createAgentSession(config: AgentConfig): AgentSession {
   ];
 
   return {
-    async *chat(userInput: string): AsyncGenerator<AgentEvent, void, void> {
+    async *chat(userInput: string, signal?: AbortSignal): AsyncGenerator<AgentEvent, void, void> {
       history.push({ role: "user", content: userInput });
       const tools = listTools().map(toToolSpec);
 
-      yield* runToolLoop(history, {
-        llm: config.llm,
-        executor: config.executor,
-        tools,
-        maxIterations: config.maxIterations,
-      });
+      yield* runToolLoop(
+        history,
+        {
+          llm: config.llm,
+          executor: config.executor,
+          tools,
+          maxIterations: config.maxIterations,
+        },
+        signal,
+      );
     },
   };
 }

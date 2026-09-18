@@ -47,7 +47,7 @@ describe("runToolLoop", () => {
     const events = await collect(runToolLoop(history, { llm, executor, tools: [] }));
 
     expect(executor.execute).toHaveBeenCalledTimes(1);
-    expect(executor.execute).toHaveBeenCalledWith("add_numbers", { a: 1, b: 2 });
+    expect(executor.execute).toHaveBeenCalledWith("add_numbers", { a: 1, b: 2 }, undefined);
     expect(events).toEqual([
       { type: "toolCall", toolName: "add_numbers", args: { a: 1, b: 2 } },
       { type: "toolResult", toolName: "add_numbers", output: 3 },
@@ -105,5 +105,32 @@ describe("runToolLoop", () => {
 
     expect(events.at(-1)).toEqual({ type: "message", content: "Stopped after 2 turns without a final answer." });
     expect(chat).toHaveBeenCalledTimes(2);
+  });
+
+  it("passes the given signal through to llm.chat", async () => {
+    const chat = vi.fn().mockResolvedValue(ok({ role: "assistant", content: "hi" }));
+    const llm: LLMProvider = { chat };
+    const executor: Executor = { execute: vi.fn() };
+    const history: ChatMessage[] = [{ role: "user", content: "hi" }];
+    const controller = new AbortController();
+
+    await collect(runToolLoop(history, { llm, executor, tools: [] }, controller.signal));
+
+    expect(chat).toHaveBeenCalledWith(expect.objectContaining({ signal: controller.signal }));
+  });
+
+  it("passes the given signal through to executor.execute", async () => {
+    const llm = llmReturning(
+      ok({ role: "assistant", content: "", toolCalls: [{ toolName: "add_numbers", args: { a: 1, b: 2 } }] }),
+      ok({ role: "assistant", content: "done" }),
+    );
+    const execute = vi.fn().mockResolvedValue(ok(3));
+    const executor: Executor = { execute };
+    const history: ChatMessage[] = [{ role: "user", content: "add 1 and 2" }];
+    const controller = new AbortController();
+
+    await collect(runToolLoop(history, { llm, executor, tools: [] }, controller.signal));
+
+    expect(execute).toHaveBeenCalledWith("add_numbers", { a: 1, b: 2 }, controller.signal);
   });
 });

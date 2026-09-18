@@ -27,4 +27,6 @@ export interface ChatRequest {
   /** Tools the model may call natively. Omit to disable tool-calling for the request. */
   tools?: ToolSpec[];
   temperature?: number;
+  /** Aborts the underlying request when triggered. */
+  signal?: AbortSignal;
 }

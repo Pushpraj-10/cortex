@@ -2,10 +2,10 @@ import React from "react";
 import { Box, Text } from "ink";
 import { colors } from "../theme.js";
 import { Markdown } from "./Markdown.js";
-import type { Message } from "../types.js";
+import type { MessageEntry } from "../types.js";
 
 interface MessageBubbleProps {
-  message: Message;
+  message: MessageEntry;
 }
 
 export function MessageBubble({ message }: MessageBubbleProps) {
@@ -14,6 +14,14 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       <Box marginBottom={1}>
         <Text color={colors.accent}>{"> "}</Text>
         <Text>{message.content}</Text>
+      </Box>
+    );
+  }
+
+  if (message.isError) {
+    return (
+      <Box marginBottom={1} marginLeft={2}>
+        <Text color={colors.error}>{message.content}</Text>
       </Box>
     );
   }

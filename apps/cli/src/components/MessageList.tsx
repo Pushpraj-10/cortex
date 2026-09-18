@@ -3,13 +3,12 @@ import { Box } from "ink";
 import { Banner } from "./Banner.js";
 import { MessageBubble } from "./MessageBubble.js";
 import { ToolCallBlock } from "./ToolCallBlock.js";
-import type { Message, ToolCallData } from "../types.js";
+import type { TimelineEntry } from "../types.js";
 
 interface MessageListProps {
   cwd: string;
   height: number;
-  messages: Message[];
-  toolCalls: ToolCallData[];
+  timeline: TimelineEntry[];
   expandedToolCallIds: ReadonlySet<string>;
 }
 
@@ -20,20 +19,17 @@ interface MessageListProps {
  * off the top — a tail -f effect handled entirely by Yoga's flex layout, no manual
  * line-counting needed.
  */
-export function MessageList({ cwd, height, messages, toolCalls, expandedToolCallIds }: MessageListProps) {
+export function MessageList({ cwd, height, timeline, expandedToolCallIds }: MessageListProps) {
   return (
     <Box height={height} overflow="hidden" flexDirection="column" justifyContent="flex-end">
       <Box flexDirection="column">
         <Banner cwd={cwd} />
-        {messages.map((message) => (
-          <MessageBubble key={message.id} message={message} />
-        ))}
-        {toolCalls.length > 0 && (
-          <Box flexDirection="column" marginBottom={1}>
-            {toolCalls.map((toolCall) => (
-              <ToolCallBlock key={toolCall.id} data={toolCall} expanded={expandedToolCallIds.has(toolCall.id)} />
-            ))}
-          </Box>
+        {timeline.map((entry) =>
+          entry.kind === "message" ? (
+            <MessageBubble key={entry.id} message={entry} />
+          ) : (
+            <ToolCallBlock key={entry.id} data={entry} expanded={expandedToolCallIds.has(entry.id)} />
+          ),
         )}
       </Box>
     </Box>

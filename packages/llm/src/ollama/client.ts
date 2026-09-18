@@ -30,6 +30,7 @@ class OllamaClient implements LLMProvider {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(buildRequestBody(this.config, request)),
+        signal: request.signal,
       });
     } catch (error) {
       return err(new OllamaRequestError(`Failed to reach Ollama at ${this.baseUrl}`, error));

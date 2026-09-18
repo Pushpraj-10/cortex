@@ -1,13 +1,19 @@
 # @cortex/cli
 
-An [Ink](https://github.com/vadimdemedes/ink) (React for terminals) TUI. This is a
-**visual prototype fed by mock data** — no `@cortex/agent`/`@cortex/llm`/`@cortex/tools`
-wiring yet. The whole point of the split is that the UI shell and the real agent
-logic can be built and changed independently: swapping mock data for a real
-`AgentSession` later should only touch `App.tsx`'s state/submit logic, not any
-component in `src/components/`.
+An [Ink](https://github.com/vadimdemedes/ink) (React for terminals) TUI, wired to the
+real `@cortex/agent` stack: a local Ollama model, driving the 10 sandboxed
+file-system tools in `@cortex/tools` through native tool-calling. `src/index.ts` is
+the composition root — it registers the Ollama provider and every tool, builds an
+`AgentSession` from env config, and hands it to `App` as a prop. Everything under
+`src/components/`, `src/hooks/`, and `src/format/` is agent-agnostic — it only knows
+about `TimelineEntry`/`AgentEvent` shapes, not about Ollama or the tools registry.
 
 ## Running it
+
+Needs [Ollama](https://ollama.com) running locally with a tool-calling-capable model
+pulled (`ollama pull llama3.1`). Set `OLLAMA_MODEL` (required — no default) and
+optionally `OLLAMA_BASE_URL` (defaults to `http://localhost:11434`), either as real
+env vars or in a `.env` file at the repo root (see `.env.example`).
 
 ```
 npm run dev
@@ -15,7 +21,8 @@ npm run dev
 
 Runs `apps/cli/src/index.ts` directly via `tsx` — needs a real terminal (TTY) for
 keyboard input to work; piping stdin or running in a non-interactive shell will still
-render but keystrokes won't register.
+render but keystrokes won't register. If `OLLAMA_MODEL` isn't set, it fails fast with
+a `console.error` before Ink takes over the terminal, rather than as in-TUI state.
 
 To run it as a standalone `cortex` command:
 
@@ -27,10 +34,16 @@ cortex
 
 `bin.cortex` points at `src/index.ts` with a `#!/usr/bin/env -S npx tsx` shebang, so
 `npm link` gives you a working `cortex` binary with no build step — `tsx` (a
-dependency of this package) transpiles on the fly.
+dependency of this package) transpiles on the fly. **Note:** `loadDotEnv()` reads
+`.env` relative to `process.cwd()`, which for a globally-linked `cortex` is the
+*user's* project directory, not this monorepo — export `OLLAMA_MODEL`/`OLLAMA_BASE_URL`
+as real env vars for that case instead of relying on a `.env` file.
 
-**Ctrl+C** exits. **Ctrl+T** toggles the most recent tool-call block open/closed (a
-stand-in for real per-item expand/collapse, until there's a focus-navigation system).
+**Ctrl+C** exits. **Esc** while thinking aborts the in-flight request (a real
+`AbortSignal`, threaded through `@cortex/llm`'s `fetch` call — not just a UI-level
+"stop showing output"). **Ctrl+T** toggles the most recent tool-call block open/closed
+(a stand-in for real per-item expand/collapse, until there's a focus-navigation
+system).
 
 ## Structure → visual element
 
@@ -39,17 +52,21 @@ stand-in for real per-item expand/collapse, until there's a focus-navigation sys
 | `src/theme.ts` | **Everything visual in one place**: the 5 colors, the banner ASCII art, tagline, placeholder text, status hint, thinking verbs. Retheme by editing this file only. |
 | `src/components/Banner.tsx` | Startup wordmark box + tagline + cwd (element 1). Scrolls away naturally as conversation grows — it's just the first thing in the scrollable area, not pinned. |
 | `src/components/InputBox.tsx` | The bordered, multi-line-capable input box at the bottom (element 2). Owns cursor positioning and the empty-state placeholder; doesn't own keystroke handling (see `App.tsx`). |
-| `src/theme.ts` `colors` | The 5-color theme (element 3): `accent`, `muted`, `error`, `success`, `removed`. `error`/`success` aren't wired to any UI yet since nothing in this mock produces errors or diffs — the tokens exist for when real tool output does. |
-| `src/components/ThinkingIndicator.tsx` + `src/hooks/useSpinnerFrame.ts` + `src/hooks/useRotatingVerb.ts` + `src/hooks/useElapsedTime.ts` | Spinner + rotating verb + elapsed seconds + fake token count, one line, in place (element 4). |
+| `src/theme.ts` `colors` | The 5-color theme (element 3): `accent`, `muted`, `error`, `success`, `removed`. `error` renders a real `LLM request failed` message in red (see `src/format/classify-agent-message.ts`); `success`/`removed` are still unused — nothing here produces a diff view yet. |
+| `src/components/ThinkingIndicator.tsx` + `src/hooks/useSpinnerFrame.ts` + `src/hooks/useRotatingVerb.ts` + `src/hooks/useElapsedTime.ts` | Spinner + rotating verb + elapsed seconds + fake token count, one line, in place (element 4). Stays active for the agent's *entire* multi-turn tool loop, not just the first model round-trip. |
 | `src/components/StatusLine.tsx` | Footer line: model name, cwd, hint (element 5). |
 | `src/components/MessageBubble.tsx` + `src/components/Markdown.tsx` | User (`>`-prefixed) vs. assistant (indented, unprefixed) message rendering, with a hand-rolled markdown renderer for `**bold**`, `` `code spans` ``, fenced code blocks, and `-`/`*` bullet lists (element 6). |
 | `src/components/ToolCallBlock.tsx` | Collapsible-looking tool-call summary (`●`/`⏺` + one line, expands to a detail box) (element 7). Expand state lives in `App.tsx`, toggled with Ctrl+T — see "Known limitations". |
-| `src/components/SlashCommandMenu.tsx` | Bordered, filterable, arrow-key-navigable `/command` popup (element 8). |
-| `src/App.tsx` | Everything interactive: all keystroke handling (typing, backspace, arrows, history recall, Ctrl+C, Esc), submit → fake `setTimeout` "thinking" → stub response, and the fixed-height layout math that sizes the scrollable message viewport around whatever the input box/thinking line/slash menu currently need. |
+| `src/components/SlashCommandMenu.tsx` | Bordered, filterable, arrow-key-navigable `/command` popup (element 8) — still decorative, see "Known limitations". |
+| `src/components/MessageList.tsx` | Renders one chronological `TimelineEntry[]` (messages and tool calls interleaved in the order they happened), inside the fixed-height "tail" viewport. |
+| `src/format/summarize-tool-call.ts` | Maps a raw `(toolName, args)` tool call into the one-line collapsed summary (`Read src/index.ts`, `Move a.ts → b.ts`, ...). |
+| `src/format/format-tool-result-detail.ts` | Formats a tool's output for the expanded `ToolCallBlock` detail view (pretty-printed JSON, truncated past ~2000 chars). |
+| `src/format/classify-agent-message.ts` | Flags the one message `runToolLoop` yields on a failed LLM request, so `MessageBubble` can render it in `colors.error` — a deliberate string-prefix check confined to this package (see the file's own comment for why). |
+| `src/wiring/*.ts` | The composition root's helpers: `.env` loading, provider/tool registration, and `createCliAgentSession()` (builds the real `AgentSession`). Called once, from `index.ts`, before `render()`. |
+| `src/App.tsx` | Everything interactive: all keystroke handling (typing, backspace, arrows, history recall, Ctrl+C, Esc-to-abort), `submit()` draining `session.chat()`'s `AsyncGenerator<AgentEvent>` into `timeline` state event-by-event, and the fixed-height layout math that sizes the scrollable message viewport around whatever the input box/thinking line/slash menu currently need. |
 | `src/hooks/useAltScreen.ts` | Switches into the terminal's alternate screen buffer on mount, restores it (and cursor visibility) on unmount/Ctrl+C/SIGTERM — this is what makes Cortex a full-screen fixed-height app instead of one that scrolls the normal terminal buffer. |
 | `src/hooks/useTerminalSize.ts` | Tracks `columns`/`rows`, updated on resize — `App.tsx` uses `rows` to size the fixed-height root `Box`; `InputBox`'s border uses `width="100%"` so it resizes with the terminal automatically. |
-| `src/hooks/useInputHistory.ts` | Up/down arrow recall through `mock/mockHistory.ts`. |
-| `src/mock/*.ts` | All mock data: conversation seed, command history, slash commands, tool calls. Swap these (and the `setTimeout` stub in `App.tsx`'s `submit()`) for real data when wiring in the agent. |
+| `src/hooks/useInputHistory.ts` | Up/down arrow recall through `mock/mockHistory.ts` — still mock, see "Known limitations". |
 
 ## How the fixed-height layout works
 
@@ -75,10 +92,33 @@ the slash menu's height if open, and 1 for the status line. Because these number
 derived from the same state that determines what those components actually render,
 they stay in sync without a DOM-measurement pass.
 
+## How the agent wiring works
+
+`session.chat(userInput, signal)` returns an `AsyncGenerator<AgentEvent>`. `App.tsx`'s
+`submit()` drains it with `for await`, appending to `timeline` per event rather than
+buffering to one final callback — `isThinking` is set once before the loop and
+cleared once in a `finally` after the generator fully drains, so the spinner stays
+active across the agent's entire multi-turn tool loop, not just the first model call.
+
+`toolCall`/`toolResult` events arrive as two separate events with no shared id, but
+`runToolLoop` (in `@cortex/agent`) is guaranteed to act on only one tool call at a
+time, fully awaiting its execution before yielding the result — so pairing them via a
+single "most recently pending" id, tracked locally inside `submit()`, is always
+correct, not a heuristic.
+
+Escape aborts the real in-flight request: `submit()` creates an `AbortController` per
+call, passes `.signal` into `session.chat()`, and Escape calls `.abort()`. Since an
+aborted request surfaces through `runToolLoop` as the same
+`"LLM request failed: ..."` shape as a genuine failure, a `userCancelledRef` flag set
+by the Escape handler makes the adapter skip appending that one trailing message
+instead of showing a spurious error bubble.
+
 ## Known limitations
 
-- **Pure UI, no real agent.** Every response is a canned `setTimeout` + a stub
-  message. See `App.tsx`'s `submit()`.
+- **Slash commands are still decorative.** `/help`, `/clear`, `/model`, etc. only
+  autofill the input box on selection — none of them execute anything.
+- **Command history (`mock/mockHistory.ts`) is still mock data**, not persisted real
+  history.
 - **Shift+Enter for multi-line is best-effort.** Not all terminals report Shift+Enter
   as distinct from Enter. Alt/Option+Enter (`key.meta`) reliably inserts a newline;
   pasting multi-line text also works (it arrives as literal `\n` in the input, not as
@@ -86,8 +126,12 @@ they stay in sync without a DOM-measurement pass.
 - **Tool-call expand/collapse is a stub interaction.** There's no focus-navigation
   system yet, so Ctrl+T toggles only the *last* tool-call block rather than letting
   you pick one.
-- **No streaming.** Not applicable yet since there's no real model call, but the
-  eventual real wiring will need to decide how token-by-token output interacts with
-  the fixed-height "tail" viewport.
+- **Cancellation stops at the HTTP layer.** Escape aborts the Ollama `fetch` call, but
+  the 10 file-system tool handlers don't pass `context.signal` into their own
+  `fs.promises` calls, so an in-flight file operation isn't itself interrupted (file
+  ops are fast enough that this is low-value in practice).
+- **No streaming.** `@cortex/llm` is request/response, not token-by-token.
+- **Only Ollama.** The provider registry supports adding more without changing this
+  package's own code, but nothing else is registered yet.
 - **No build step.** `bin.cortex` runs `src/index.ts` straight through `tsx`,
   consistent with the rest of this monorepo (see root `package.json`'s `dev` script).

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Box, useApp, useInput } from "ink";
+import type { AgentSession } from "@cortex/agent";
 
 import { MessageList } from "./components/MessageList.js";
 import { InputBox } from "./components/InputBox.js";
@@ -9,33 +10,37 @@ import { SlashCommandMenu } from "./components/SlashCommandMenu.js";
 import { useTerminalSize } from "./hooks/useTerminalSize.js";
 import { useInputHistory } from "./hooks/useInputHistory.js";
 import { useAltScreen } from "./hooks/useAltScreen.js";
-import { initialMessages } from "./mock/mockMessages.js";
 import { mockHistory } from "./mock/mockHistory.js";
 import { mockSlashCommands } from "./mock/mockSlashCommands.js";
-import { mockToolCalls } from "./mock/mockToolCalls.js";
 import { maxInputBoxLines } from "./theme.js";
-import type { Message, SlashCommand } from "./types.js";
+import { summarizeToolCall } from "./format/summarize-tool-call.js";
+import { formatToolResultDetail } from "./format/format-tool-result-detail.js";
+import { isLlmFailureMessage } from "./format/classify-agent-message.js";
+import type { SlashCommand, TimelineEntry } from "./types.js";
 
-const MODEL_NAME = "llama3.1 (ollama)";
-const FAKE_RESPONSE_DELAY_MS = 2500;
+export interface AppProps {
+  session: AgentSession;
+  cwd: string;
+  model: string;
+}
 
 function nextId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function App() {
+export function App({ session, cwd, model }: AppProps) {
   useAltScreen();
   const { exit } = useApp();
   const { rows } = useTerminalSize();
-  const cwd = process.cwd();
 
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [value, setValue] = useState("");
   const [cursorOffset, setCursorOffset] = useState(0);
   const [isThinking, setIsThinking] = useState(false);
   const [expandedToolCallIds, setExpandedToolCallIds] = useState<Set<string>>(new Set());
   const [slashIndex, setSlashIndex] = useState(0);
-  const thinkingTimeout = useRef<NodeJS.Timeout | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const userCancelledRef = useRef(false);
   const history = useInputHistory(mockHistory);
 
   const slashMenuOpen = value.startsWith("/") && !value.includes("\n") && !value.slice(1).includes(" ");
@@ -52,7 +57,7 @@ export function App() {
 
   useEffect(() => {
     return () => {
-      if (thinkingTimeout.current) clearTimeout(thinkingTimeout.current);
+      abortControllerRef.current?.abort();
     };
   }, []);
 
@@ -73,39 +78,60 @@ export function App() {
     setCursorOffset(cursorOffset - 1);
   }
 
-  function submit() {
+  async function submit() {
     const trimmed = value.trim();
-    if (!trimmed) return;
+    if (!trimmed || isThinking) return;
 
-    setMessages((prev) => [...prev, { id: nextId("user"), role: "user", content: trimmed }]);
+    setTimeline((prev) => [...prev, { kind: "message", id: nextId("user"), role: "user", content: trimmed }]);
     setValueAndCursor("", 0);
     history.reset();
     setIsThinking(true);
 
-    thinkingTimeout.current = setTimeout(() => {
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    userCancelledRef.current = false;
+
+    let pendingToolEntryId: string | null = null;
+
+    try {
+      for await (const event of session.chat(trimmed, controller.signal)) {
+        if (event.type === "toolCall") {
+          const id = nextId("tool");
+          pendingToolEntryId = id;
+          setTimeline((prev) => [
+            ...prev,
+            { kind: "toolCall", id, summary: summarizeToolCall(event.toolName, event.args), detail: "Running…" },
+          ]);
+        } else if (event.type === "toolResult") {
+          const id = pendingToolEntryId;
+          pendingToolEntryId = null;
+          const detail = formatToolResultDetail(event.output);
+          setTimeline((prev) =>
+            prev.map((entry) => (entry.kind === "toolCall" && entry.id === id ? { ...entry, detail } : entry)),
+          );
+        } else {
+          if (userCancelledRef.current) continue;
+          setTimeline((prev) => [
+            ...prev,
+            {
+              kind: "message",
+              id: nextId("assistant"),
+              role: "assistant",
+              content: event.content,
+              isError: isLlmFailureMessage(event.content),
+            },
+          ]);
+        }
+      }
+    } finally {
       setIsThinking(false);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: nextId("assistant"),
-          role: "assistant",
-          content:
-            "This is a **stub** response — real agent wiring comes later. You said:\n\n" +
-            "```\n" +
-            trimmed +
-            "\n```",
-        },
-      ]);
-      thinkingTimeout.current = null;
-    }, FAKE_RESPONSE_DELAY_MS);
+      abortControllerRef.current = null;
+    }
   }
 
   function cancelThinking() {
-    if (thinkingTimeout.current) {
-      clearTimeout(thinkingTimeout.current);
-      thinkingTimeout.current = null;
-    }
-    setIsThinking(false);
+    userCancelledRef.current = true;
+    abortControllerRef.current?.abort();
   }
 
   function acceptSlashCommand(command: SlashCommand) {
@@ -114,12 +140,12 @@ export function App() {
   }
 
   function toggleLastToolCall() {
-    const last = mockToolCalls[mockToolCalls.length - 1];
-    if (!last) return;
+    const lastToolCall = [...timeline].reverse().find((entry) => entry.kind === "toolCall");
+    if (!lastToolCall) return;
     setExpandedToolCallIds((prev) => {
       const next = new Set(prev);
-      if (next.has(last.id)) next.delete(last.id);
-      else next.add(last.id);
+      if (next.has(lastToolCall.id)) next.delete(lastToolCall.id);
+      else next.add(lastToolCall.id);
       return next;
     });
   }
@@ -161,7 +187,7 @@ export function App() {
 
       if (key.return) {
         if (key.shift || key.meta) insertText("\n");
-        else submit();
+        else void submit();
         return;
       }
 
@@ -203,17 +229,11 @@ export function App() {
 
   return (
     <Box flexDirection="column" height={rows}>
-      <MessageList
-        cwd={cwd}
-        height={messageListHeight}
-        messages={messages}
-        toolCalls={mockToolCalls}
-        expandedToolCallIds={expandedToolCallIds}
-      />
+      <MessageList cwd={cwd} height={messageListHeight} timeline={timeline} expandedToolCallIds={expandedToolCallIds} />
       {isThinking && <ThinkingIndicator active={isThinking} />}
       {slashMenuOpen && <SlashCommandMenu commands={filteredCommands} selectedIndex={clampedSlashIndex} />}
       <InputBox value={value} cursorOffset={cursorOffset} />
-      <StatusLine model={MODEL_NAME} cwd={cwd} />
+      <StatusLine model={`${model} (ollama)`} cwd={cwd} />
     </Box>
   );
 }

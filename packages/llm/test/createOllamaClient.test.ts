@@ -106,4 +106,31 @@ describe("createOllamaClient", () => {
       { type: "function", function: { name: "read_file", description: "Reads a file", parameters: { type: "object" } } },
     ]);
   });
+
+  it("passes request.signal through to fetch", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ message: { content: "ok" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createOllamaClient({ model: "llama3.1" });
+    const controller = new AbortController();
+
+    await client.chat({ messages: [], signal: controller.signal });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.signal).toBe(controller.signal);
+  });
+
+  it("returns an error Result when the request is aborted", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new DOMException("The operation was aborted.", "AbortError")),
+    );
+    const client = createOllamaClient({ model: "llama3.1" });
+    const controller = new AbortController();
+    controller.abort();
+
+    const result = await client.chat({ messages: [], signal: controller.signal });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBeInstanceOf(OllamaRequestError);
+  });
 });
