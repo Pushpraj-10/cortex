@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { ok, err, type Result } from "@cortex/shared";
+import { ok, err, resolveWorkspacePath, type Result } from "@cortex/shared";
 import type { ToolDefinition, ToolExecutionContext } from "../types.js";
 import { FileSystemToolError } from "./errors.js";
 
@@ -15,9 +15,11 @@ interface MoveFileResult {
 
 async function moveFileHandler(args: MoveFileArgs, context: ToolExecutionContext): Promise<Result<MoveFileResult>> {
   try {
-    const toDir = path.dirname(args.to);
+    const resolvedFrom = resolveWorkspacePath(context.cwd, args.from);
+    const resolvedTo = resolveWorkspacePath(context.cwd, args.to);
+    const toDir = path.dirname(resolvedTo);
     await fs.mkdir(toDir, { recursive: true });
-    await fs.rename(args.from, args.to);
+    await fs.rename(resolvedFrom, resolvedTo);
     return ok({ success: true });
   } catch (error) {
     return err(new FileSystemToolError(`Failed to move file from ${args.from} to ${args.to}: ${error}`));

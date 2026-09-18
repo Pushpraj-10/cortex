@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MissingTemplateVariableError, renderTemplateString } from "../../src/internal/renderTemplateString.js";
+import { MissingTemplateVariableError, renderTemplateString } from "../../src/core/render-template-string.js";
 
 describe("renderTemplateString", () => {
   it("substitutes a single placeholder", () => {
@@ -14,7 +14,7 @@ describe("renderTemplateString", () => {
     expect(renderTemplateString("no placeholders here", {})).toBe("no placeholders here");
   });
 
-  it("throws when a placeholder has no matching variable", () => {
+  it("throws MissingTemplateVariableError when a placeholder has no matching variable", () => {
     expect(() => renderTemplateString("Hello {{name}}", {})).toThrow(MissingTemplateVariableError);
   });
 });

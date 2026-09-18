@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createStringTemplate } from "../../src/internal/createStringTemplate.js";
+import { createStringTemplate } from "../../src/core/string-template.js";
 
 describe("createStringTemplate", () => {
   it("renders the given template string with vars substituted", () => {

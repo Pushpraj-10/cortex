@@ -6,10 +6,11 @@ import type { ToolExecutionContext } from "../../src/types.js";
 
 describe("getFileInfoTool", () => {
   let tempDir: string;
-  const context: ToolExecutionContext = { cwd: process.cwd() };
+  let context: ToolExecutionContext;
 
   beforeEach(async () => {
     tempDir = await fs.mkdtemp(path.join(process.cwd(), "test-"));
+    context = { cwd: tempDir };
   });
 
   afterEach(async () => {
@@ -23,11 +24,10 @@ describe("getFileInfoTool", () => {
   });
 
   it("returns file info for a file", async () => {
-    const filePath = path.join(tempDir, "test.txt");
     const content = "Hello, World!";
-    await fs.writeFile(filePath, content, "utf-8");
+    await fs.writeFile(path.join(tempDir, "test.txt"), content, "utf-8");
 
-    const result = await getFileInfoTool.handler({ path: filePath }, context);
+    const result = await getFileInfoTool.handler({ path: "test.txt" }, context);
 
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -40,10 +40,9 @@ describe("getFileInfoTool", () => {
   });
 
   it("returns directory info for a directory", async () => {
-    const dirPath = path.join(tempDir, "subdir");
-    await fs.mkdir(dirPath);
+    await fs.mkdir(path.join(tempDir, "subdir"));
 
-    const result = await getFileInfoTool.handler({ path: dirPath }, context);
+    const result = await getFileInfoTool.handler({ path: "subdir" }, context);
 
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -55,9 +54,7 @@ describe("getFileInfoTool", () => {
   });
 
   it("returns error for nonexistent path", async () => {
-    const filePath = path.join(tempDir, "nonexistent.txt");
-
-    const result = await getFileInfoTool.handler({ path: filePath }, context);
+    const result = await getFileInfoTool.handler({ path: "nonexistent.txt" }, context);
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -66,14 +63,18 @@ describe("getFileInfoTool", () => {
   });
 
   it("returns timestamps in ISO format", async () => {
-    const filePath = path.join(tempDir, "test.txt");
-    await fs.writeFile(filePath, "content", "utf-8");
+    await fs.writeFile(path.join(tempDir, "test.txt"), "content", "utf-8");
 
-    const result = await getFileInfoTool.handler({ path: filePath }, context);
+    const result = await getFileInfoTool.handler({ path: "test.txt" }, context);
 
     if (result.ok) {
       expect(result.value.modified).toMatch(/^\d{4}-\d{2}-\d{2}T/);
       expect(result.value.created).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     }
+  });
+
+  it("rejects a path that escapes the workspace root", async () => {
+    const result = await getFileInfoTool.handler({ path: "../outside.txt" }, context);
+    expect(result.ok).toBe(false);
   });
 });

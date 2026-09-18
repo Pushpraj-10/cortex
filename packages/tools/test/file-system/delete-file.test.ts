@@ -6,10 +6,11 @@ import type { ToolExecutionContext } from "../../src/types.js";
 
 describe("deleteFileTool", () => {
   let tempDir: string;
-  const context: ToolExecutionContext = { cwd: process.cwd() };
+  let context: ToolExecutionContext;
 
   beforeEach(async () => {
     tempDir = await fs.mkdtemp(path.join(process.cwd(), "test-"));
+    context = { cwd: tempDir };
   });
 
   afterEach(async () => {
@@ -26,7 +27,7 @@ describe("deleteFileTool", () => {
     const filePath = path.join(tempDir, "test.txt");
     await fs.writeFile(filePath, "content", "utf-8");
 
-    const result = await deleteFileTool.handler({ path: filePath }, context);
+    const result = await deleteFileTool.handler({ path: "test.txt" }, context);
 
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -38,13 +39,16 @@ describe("deleteFileTool", () => {
   });
 
   it("returns error when file does not exist", async () => {
-    const filePath = path.join(tempDir, "nonexistent.txt");
-
-    const result = await deleteFileTool.handler({ path: filePath }, context);
+    const result = await deleteFileTool.handler({ path: "nonexistent.txt" }, context);
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("TOOL_FILE_SYSTEM_ERROR");
     }
+  });
+
+  it("rejects a path that escapes the workspace root", async () => {
+    const result = await deleteFileTool.handler({ path: "../outside.txt" }, context);
+    expect(result.ok).toBe(false);
   });
 });

@@ -6,10 +6,11 @@ import type { ToolExecutionContext } from "../../src/types.js";
 
 describe("fileExistsTool", () => {
   let tempDir: string;
-  const context: ToolExecutionContext = { cwd: process.cwd() };
+  let context: ToolExecutionContext;
 
   beforeEach(async () => {
     tempDir = await fs.mkdtemp(path.join(process.cwd(), "test-"));
+    context = { cwd: tempDir };
   });
 
   afterEach(async () => {
@@ -23,10 +24,9 @@ describe("fileExistsTool", () => {
   });
 
   it("returns true for existing file", async () => {
-    const filePath = path.join(tempDir, "test.txt");
-    await fs.writeFile(filePath, "content", "utf-8");
+    await fs.writeFile(path.join(tempDir, "test.txt"), "content", "utf-8");
 
-    const result = await fileExistsTool.handler({ path: filePath }, context);
+    const result = await fileExistsTool.handler({ path: "test.txt" }, context);
 
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -35,10 +35,9 @@ describe("fileExistsTool", () => {
   });
 
   it("returns true for existing directory", async () => {
-    const dirPath = path.join(tempDir, "subdir");
-    await fs.mkdir(dirPath);
+    await fs.mkdir(path.join(tempDir, "subdir"));
 
-    const result = await fileExistsTool.handler({ path: dirPath }, context);
+    const result = await fileExistsTool.handler({ path: "subdir" }, context);
 
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -47,9 +46,16 @@ describe("fileExistsTool", () => {
   });
 
   it("returns false for nonexistent path", async () => {
-    const filePath = path.join(tempDir, "nonexistent.txt");
+    const result = await fileExistsTool.handler({ path: "nonexistent.txt" }, context);
 
-    const result = await fileExistsTool.handler({ path: filePath }, context);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.exists).toBe(false);
+    }
+  });
+
+  it("returns false (not an error) for a path that escapes the workspace root", async () => {
+    const result = await fileExistsTool.handler({ path: "../outside.txt" }, context);
 
     expect(result.ok).toBe(true);
     if (result.ok) {

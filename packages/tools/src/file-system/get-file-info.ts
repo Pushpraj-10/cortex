@@ -1,5 +1,5 @@
 import { promises as fs } from "node:fs";
-import { ok, err, type Result } from "@cortex/shared";
+import { ok, err, resolveWorkspacePath, type Result } from "@cortex/shared";
 import type { ToolDefinition, ToolExecutionContext } from "../types.js";
 import { FileSystemToolError } from "./errors.js";
 
@@ -17,7 +17,8 @@ interface GetFileInfoResult {
 
 async function getFileInfoHandler(args: GetFileInfoArgs, context: ToolExecutionContext): Promise<Result<GetFileInfoResult>> {
   try {
-    const stats = await fs.stat(args.path);
+    const resolvedPath = resolveWorkspacePath(context.cwd, args.path);
+    const stats = await fs.stat(resolvedPath);
     return ok({
       size: stats.size,
       isDirectory: stats.isDirectory(),

@@ -6,10 +6,11 @@ import type { ToolExecutionContext } from "../../src/types.js";
 
 describe("moveFileTool", () => {
   let tempDir: string;
-  const context: ToolExecutionContext = { cwd: process.cwd() };
+  let context: ToolExecutionContext;
 
   beforeEach(async () => {
     tempDir = await fs.mkdtemp(path.join(process.cwd(), "test-"));
+    context = { cwd: tempDir };
   });
 
   afterEach(async () => {
@@ -24,57 +25,59 @@ describe("moveFileTool", () => {
   });
 
   it("moves file to new location", async () => {
-    const fromPath = path.join(tempDir, "original.txt");
-    const toPath = path.join(tempDir, "moved.txt");
     const content = "file content";
-    await fs.writeFile(fromPath, content, "utf-8");
+    await fs.writeFile(path.join(tempDir, "original.txt"), content, "utf-8");
 
-    const result = await moveFileTool.handler({ from: fromPath, to: toPath }, context);
+    const result = await moveFileTool.handler({ from: "original.txt", to: "moved.txt" }, context);
 
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.success).toBe(true);
     }
 
-    const fromExists = await fs.access(fromPath).then(() => true).catch(() => false);
+    const fromExists = await fs
+      .access(path.join(tempDir, "original.txt"))
+      .then(() => true)
+      .catch(() => false);
     expect(fromExists).toBe(false);
 
-    const toContent = await fs.readFile(toPath, "utf-8");
+    const toContent = await fs.readFile(path.join(tempDir, "moved.txt"), "utf-8");
     expect(toContent).toBe(content);
   });
 
   it("renames file", async () => {
-    const fromPath = path.join(tempDir, "old.txt");
-    const toPath = path.join(tempDir, "new.txt");
-    await fs.writeFile(fromPath, "content", "utf-8");
+    await fs.writeFile(path.join(tempDir, "old.txt"), "content", "utf-8");
 
-    const result = await moveFileTool.handler({ from: fromPath, to: toPath }, context);
+    const result = await moveFileTool.handler({ from: "old.txt", to: "new.txt" }, context);
 
     expect(result.ok).toBe(true);
 
-    const newExists = await fs.access(toPath).then(() => true).catch(() => false);
+    const newExists = await fs
+      .access(path.join(tempDir, "new.txt"))
+      .then(() => true)
+      .catch(() => false);
     expect(newExists).toBe(true);
   });
 
   it("creates destination directory if needed", async () => {
-    const fromPath = path.join(tempDir, "file.txt");
-    const toPath = path.join(tempDir, "newdir", "subdir", "file.txt");
-    await fs.writeFile(fromPath, "content", "utf-8");
+    await fs.writeFile(path.join(tempDir, "file.txt"), "content", "utf-8");
 
-    const result = await moveFileTool.handler({ from: fromPath, to: toPath }, context);
+    const result = await moveFileTool.handler({ from: "file.txt", to: "newdir/subdir/file.txt" }, context);
 
     expect(result.ok).toBe(true);
 
-    const toContent = await fs.readFile(toPath, "utf-8");
+    const toContent = await fs.readFile(path.join(tempDir, "newdir", "subdir", "file.txt"), "utf-8");
     expect(toContent).toBe("content");
   });
 
   it("returns error when source file does not exist", async () => {
-    const fromPath = path.join(tempDir, "nonexistent.txt");
-    const toPath = path.join(tempDir, "target.txt");
+    const result = await moveFileTool.handler({ from: "nonexistent.txt", to: "target.txt" }, context);
 
-    const result = await moveFileTool.handler({ from: fromPath, to: toPath }, context);
+    expect(result.ok).toBe(false);
+  });
 
+  it("rejects a from/to path that escapes the workspace root", async () => {
+    const result = await moveFileTool.handler({ from: "../outside.txt", to: "target.txt" }, context);
     expect(result.ok).toBe(false);
   });
 });

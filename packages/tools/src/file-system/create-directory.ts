@@ -1,5 +1,5 @@
 import { promises as fs } from "node:fs";
-import { ok, err, type Result } from "@cortex/shared";
+import { ok, err, resolveWorkspacePath, type Result } from "@cortex/shared";
 import type { ToolDefinition, ToolExecutionContext } from "../types.js";
 import { FileSystemToolError } from "./errors.js";
 
@@ -16,7 +16,8 @@ async function createDirectoryHandler(
   context: ToolExecutionContext,
 ): Promise<Result<CreateDirectoryResult>> {
   try {
-    await fs.mkdir(args.path, { recursive: true });
+    const resolvedPath = resolveWorkspacePath(context.cwd, args.path);
+    await fs.mkdir(resolvedPath, { recursive: true });
     return ok({ success: true });
   } catch (error) {
     return err(new FileSystemToolError(`Failed to create directory at ${args.path}: ${error}`));

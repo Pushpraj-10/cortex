@@ -6,10 +6,11 @@ import type { ToolExecutionContext } from "../../src/types.js";
 
 describe("createDirectoryTool", () => {
   let tempDir: string;
-  const context: ToolExecutionContext = { cwd: process.cwd() };
+  let context: ToolExecutionContext;
 
   beforeEach(async () => {
     tempDir = await fs.mkdtemp(path.join(process.cwd(), "test-"));
+    context = { cwd: tempDir };
   });
 
   afterEach(async () => {
@@ -23,39 +24,39 @@ describe("createDirectoryTool", () => {
   });
 
   it("creates a directory", async () => {
-    const dirPath = path.join(tempDir, "newdir");
-
-    const result = await createDirectoryTool.handler({ path: dirPath }, context);
+    const result = await createDirectoryTool.handler({ path: "newdir" }, context);
 
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.success).toBe(true);
     }
 
-    const stat = await fs.stat(dirPath);
+    const stat = await fs.stat(path.join(tempDir, "newdir"));
     expect(stat.isDirectory()).toBe(true);
   });
 
   it("creates nested directories", async () => {
-    const dirPath = path.join(tempDir, "a", "b", "c");
-
-    const result = await createDirectoryTool.handler({ path: dirPath }, context);
+    const result = await createDirectoryTool.handler({ path: "a/b/c" }, context);
 
     expect(result.ok).toBe(true);
 
-    const stat = await fs.stat(dirPath);
+    const stat = await fs.stat(path.join(tempDir, "a", "b", "c"));
     expect(stat.isDirectory()).toBe(true);
   });
 
   it("succeeds when directory already exists", async () => {
-    const dirPath = path.join(tempDir, "existing");
-    await fs.mkdir(dirPath);
+    await fs.mkdir(path.join(tempDir, "existing"));
 
-    const result = await createDirectoryTool.handler({ path: dirPath }, context);
+    const result = await createDirectoryTool.handler({ path: "existing" }, context);
 
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.success).toBe(true);
     }
+  });
+
+  it("rejects a path that escapes the workspace root", async () => {
+    const result = await createDirectoryTool.handler({ path: "../outside" }, context);
+    expect(result.ok).toBe(false);
   });
 });

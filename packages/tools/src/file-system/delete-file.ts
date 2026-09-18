@@ -1,5 +1,5 @@
 import { promises as fs } from "node:fs";
-import { ok, err, type Result } from "@cortex/shared";
+import { ok, err, resolveWorkspacePath, type Result } from "@cortex/shared";
 import type { ToolDefinition, ToolExecutionContext } from "../types.js";
 import { FileSystemToolError } from "./errors.js";
 
@@ -13,7 +13,8 @@ interface DeleteFileResult {
 
 async function deleteFileHandler(args: DeleteFileArgs, context: ToolExecutionContext): Promise<Result<DeleteFileResult>> {
   try {
-    await fs.unlink(args.path);
+    const resolvedPath = resolveWorkspacePath(context.cwd, args.path);
+    await fs.unlink(resolvedPath);
     return ok({ success: true });
   } catch (error) {
     return err(new FileSystemToolError(`Failed to delete file at ${args.path}: ${error}`));

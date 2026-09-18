@@ -6,10 +6,11 @@ import type { ToolExecutionContext } from "../../src/types.js";
 
 describe("readFileTool", () => {
   let tempDir: string;
-  const context: ToolExecutionContext = { cwd: process.cwd() };
+  let context: ToolExecutionContext;
 
   beforeEach(async () => {
     tempDir = await fs.mkdtemp(path.join(process.cwd(), "test-"));
+    context = { cwd: tempDir };
   });
 
   afterEach(async () => {
@@ -23,11 +24,10 @@ describe("readFileTool", () => {
   });
 
   it("reads file contents successfully", async () => {
-    const filePath = path.join(tempDir, "test.txt");
     const content = "Hello, World!";
-    await fs.writeFile(filePath, content, "utf-8");
+    await fs.writeFile(path.join(tempDir, "test.txt"), content, "utf-8");
 
-    const result = await readFileTool.handler({ path: filePath }, context);
+    const result = await readFileTool.handler({ path: "test.txt" }, context);
 
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -36,9 +36,7 @@ describe("readFileTool", () => {
   });
 
   it("returns error when file does not exist", async () => {
-    const filePath = path.join(tempDir, "nonexistent.txt");
-
-    const result = await readFileTool.handler({ path: filePath }, context);
+    const result = await readFileTool.handler({ path: "nonexistent.txt" }, context);
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -47,15 +45,19 @@ describe("readFileTool", () => {
   });
 
   it("reads UTF-8 encoded files", async () => {
-    const filePath = path.join(tempDir, "unicode.txt");
     const content = "Hello 世界 🌍";
-    await fs.writeFile(filePath, content, "utf-8");
+    await fs.writeFile(path.join(tempDir, "unicode.txt"), content, "utf-8");
 
-    const result = await readFileTool.handler({ path: filePath }, context);
+    const result = await readFileTool.handler({ path: "unicode.txt" }, context);
 
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.content).toBe(content);
     }
+  });
+
+  it("rejects a path that escapes the workspace root", async () => {
+    const result = await readFileTool.handler({ path: "../outside.txt" }, context);
+    expect(result.ok).toBe(false);
   });
 });

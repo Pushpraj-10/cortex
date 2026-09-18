@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { ok, err, type Result } from "@cortex/shared";
+import { ok, err, resolveWorkspacePath, type Result } from "@cortex/shared";
 import type { ToolDefinition, ToolExecutionContext } from "../types.js";
 import { FileSystemToolError } from "./errors.js";
 
@@ -15,9 +15,11 @@ interface CopyFileResult {
 
 async function copyFileHandler(args: CopyFileArgs, context: ToolExecutionContext): Promise<Result<CopyFileResult>> {
   try {
-    const toDir = path.dirname(args.to);
+    const resolvedFrom = resolveWorkspacePath(context.cwd, args.from);
+    const resolvedTo = resolveWorkspacePath(context.cwd, args.to);
+    const toDir = path.dirname(resolvedTo);
     await fs.mkdir(toDir, { recursive: true });
-    await fs.copyFile(args.from, args.to);
+    await fs.copyFile(resolvedFrom, resolvedTo);
     return ok({ success: true });
   } catch (error) {
     return err(new FileSystemToolError(`Failed to copy file from ${args.from} to ${args.to}: ${error}`));

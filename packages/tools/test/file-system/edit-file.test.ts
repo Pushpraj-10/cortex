@@ -6,10 +6,11 @@ import type { ToolExecutionContext } from "../../src/types.js";
 
 describe("editFileTool", () => {
   let tempDir: string;
-  const context: ToolExecutionContext = { cwd: process.cwd() };
+  let context: ToolExecutionContext;
 
   beforeEach(async () => {
     tempDir = await fs.mkdtemp(path.join(process.cwd(), "test-"));
+    context = { cwd: tempDir };
   });
 
   afterEach(async () => {
@@ -25,12 +26,11 @@ describe("editFileTool", () => {
   });
 
   it("replaces text successfully", async () => {
-    const filePath = path.join(tempDir, "test.txt");
     const original = "Hello, World! Hello!";
-    await fs.writeFile(filePath, original, "utf-8");
+    await fs.writeFile(path.join(tempDir, "test.txt"), original, "utf-8");
 
     const result = await editFileTool.handler(
-      { path: filePath, oldString: "World", newString: "Universe" },
+      { path: "test.txt", oldString: "World", newString: "Universe" },
       context,
     );
 
@@ -40,16 +40,15 @@ describe("editFileTool", () => {
       expect(result.value.applied).toBe(true);
     }
 
-    const edited = await fs.readFile(filePath, "utf-8");
+    const edited = await fs.readFile(path.join(tempDir, "test.txt"), "utf-8");
     expect(edited).toBe("Hello, Universe! Hello!");
   });
 
   it("returns applied:false when oldString not found", async () => {
-    const filePath = path.join(tempDir, "test.txt");
-    await fs.writeFile(filePath, "Hello, World!", "utf-8");
+    await fs.writeFile(path.join(tempDir, "test.txt"), "Hello, World!", "utf-8");
 
     const result = await editFileTool.handler(
-      { path: filePath, oldString: "notfound", newString: "replacement" },
+      { path: "test.txt", oldString: "notfound", newString: "replacement" },
       context,
     );
 
@@ -59,15 +58,13 @@ describe("editFileTool", () => {
       expect(result.value.applied).toBe(false);
     }
 
-    const unchanged = await fs.readFile(filePath, "utf-8");
+    const unchanged = await fs.readFile(path.join(tempDir, "test.txt"), "utf-8");
     expect(unchanged).toBe("Hello, World!");
   });
 
   it("returns error when file does not exist", async () => {
-    const filePath = path.join(tempDir, "nonexistent.txt");
-
     const result = await editFileTool.handler(
-      { path: filePath, oldString: "old", newString: "new" },
+      { path: "nonexistent.txt", oldString: "old", newString: "new" },
       context,
     );
 
@@ -75,16 +72,20 @@ describe("editFileTool", () => {
   });
 
   it("replaces first occurrence only (default replace behavior)", async () => {
-    const filePath = path.join(tempDir, "test.txt");
     const original = "foo bar foo baz foo";
-    await fs.writeFile(filePath, original, "utf-8");
+    await fs.writeFile(path.join(tempDir, "test.txt"), original, "utf-8");
 
+    await editFileTool.handler({ path: "test.txt", oldString: "foo", newString: "FOO" }, context);
+
+    const edited = await fs.readFile(path.join(tempDir, "test.txt"), "utf-8");
+    expect(edited).toBe("FOO bar foo baz foo");
+  });
+
+  it("rejects a path that escapes the workspace root", async () => {
     const result = await editFileTool.handler(
-      { path: filePath, oldString: "foo", newString: "FOO" },
+      { path: "../outside.txt", oldString: "a", newString: "b" },
       context,
     );
-
-    const edited = await fs.readFile(filePath, "utf-8");
-    expect(edited).toBe("FOO bar foo baz foo");
+    expect(result.ok).toBe(false);
   });
 });

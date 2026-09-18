@@ -1,6 +1,5 @@
 import { promises as fs } from "node:fs";
-import path from "node:path";
-import { ok, err, type Result } from "@cortex/shared";
+import { ok, err, resolveWorkspacePath, type Result } from "@cortex/shared";
 import type { ToolDefinition, ToolExecutionContext } from "../types.js";
 import { FileSystemToolError } from "./errors.js";
 
@@ -17,7 +16,8 @@ async function listDirectoryHandler(
   context: ToolExecutionContext,
 ): Promise<Result<ListDirectoryResult>> {
   try {
-    const entries = await fs.readdir(args.path, { withFileTypes: true });
+    const resolvedPath = resolveWorkspacePath(context.cwd, args.path);
+    const entries = await fs.readdir(resolvedPath, { withFileTypes: true });
     return ok({
       entries: entries.map((entry) => ({
         name: entry.name,

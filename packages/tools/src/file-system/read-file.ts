@@ -1,5 +1,5 @@
 import { promises as fs } from "node:fs";
-import { ok, err, type Result } from "@cortex/shared";
+import { ok, err, resolveWorkspacePath, type Result } from "@cortex/shared";
 import type { ToolDefinition, ToolExecutionContext } from "../types.js";
 import { FileSystemToolError } from "./errors.js";
 
@@ -13,7 +13,8 @@ interface ReadFileResult {
 
 async function readFileHandler(args: ReadFileArgs, context: ToolExecutionContext): Promise<Result<ReadFileResult>> {
   try {
-    const content = await fs.readFile(args.path, "utf-8");
+    const resolvedPath = resolveWorkspacePath(context.cwd, args.path);
+    const content = await fs.readFile(resolvedPath, "utf-8");
     return ok({ content });
   } catch (error) {
     return err(new FileSystemToolError(`Failed to read file at ${args.path}: ${error}`));

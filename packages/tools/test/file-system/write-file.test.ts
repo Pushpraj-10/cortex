@@ -6,10 +6,11 @@ import type { ToolExecutionContext } from "../../src/types.js";
 
 describe("writeFileTool", () => {
   let tempDir: string;
-  const context: ToolExecutionContext = { cwd: process.cwd() };
+  let context: ToolExecutionContext;
 
   beforeEach(async () => {
     tempDir = await fs.mkdtemp(path.join(process.cwd(), "test-"));
+    context = { cwd: tempDir };
   });
 
   afterEach(async () => {
@@ -24,52 +25,53 @@ describe("writeFileTool", () => {
   });
 
   it("writes file contents successfully", async () => {
-    const filePath = path.join(tempDir, "test.txt");
     const content = "Hello, World!";
 
-    const result = await writeFileTool.handler({ path: filePath, content }, context);
+    const result = await writeFileTool.handler({ path: "test.txt", content }, context);
 
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.success).toBe(true);
     }
 
-    const written = await fs.readFile(filePath, "utf-8");
+    const written = await fs.readFile(path.join(tempDir, "test.txt"), "utf-8");
     expect(written).toBe(content);
   });
 
   it("overwrites existing files", async () => {
-    const filePath = path.join(tempDir, "test.txt");
-    await fs.writeFile(filePath, "old content", "utf-8");
+    await fs.writeFile(path.join(tempDir, "test.txt"), "old content", "utf-8");
 
     const newContent = "new content";
-    const result = await writeFileTool.handler({ path: filePath, content: newContent }, context);
+    const result = await writeFileTool.handler({ path: "test.txt", content: newContent }, context);
 
     expect(result.ok).toBe(true);
 
-    const written = await fs.readFile(filePath, "utf-8");
+    const written = await fs.readFile(path.join(tempDir, "test.txt"), "utf-8");
     expect(written).toBe(newContent);
   });
 
   it("creates parent directories if needed", async () => {
-    const filePath = path.join(tempDir, "subdir", "nested", "file.txt");
     const content = "nested file";
 
-    const result = await writeFileTool.handler({ path: filePath, content }, context);
+    const result = await writeFileTool.handler({ path: "subdir/nested/file.txt", content }, context);
 
     expect(result.ok).toBe(true);
 
-    const written = await fs.readFile(filePath, "utf-8");
+    const written = await fs.readFile(path.join(tempDir, "subdir", "nested", "file.txt"), "utf-8");
     expect(written).toBe(content);
   });
 
   it("handles UTF-8 content", async () => {
-    const filePath = path.join(tempDir, "unicode.txt");
     const content = "Hello 世界 🌍";
 
-    await writeFileTool.handler({ path: filePath, content }, context);
+    await writeFileTool.handler({ path: "unicode.txt", content }, context);
 
-    const written = await fs.readFile(filePath, "utf-8");
+    const written = await fs.readFile(path.join(tempDir, "unicode.txt"), "utf-8");
     expect(written).toBe(content);
+  });
+
+  it("rejects a path that escapes the workspace root", async () => {
+    const result = await writeFileTool.handler({ path: "../outside.txt", content: "x" }, context);
+    expect(result.ok).toBe(false);
   });
 });

@@ -1,5 +1,5 @@
 import { promises as fs } from "node:fs";
-import { ok, type Result } from "@cortex/shared";
+import { ok, resolveWorkspacePath, type Result } from "@cortex/shared";
 import type { ToolDefinition, ToolExecutionContext } from "../types.js";
 
 interface FileExistsArgs {
@@ -12,7 +12,8 @@ interface FileExistsResult {
 
 async function fileExistsHandler(args: FileExistsArgs, context: ToolExecutionContext): Promise<Result<FileExistsResult>> {
   try {
-    await fs.access(args.path);
+    const resolvedPath = resolveWorkspacePath(context.cwd, args.path);
+    await fs.access(resolvedPath);
     return ok({ exists: true });
   } catch {
     return ok({ exists: false });

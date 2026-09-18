@@ -6,10 +6,11 @@ import type { ToolExecutionContext } from "../../src/types.js";
 
 describe("listDirectoryTool", () => {
   let tempDir: string;
-  const context: ToolExecutionContext = { cwd: process.cwd() };
+  let context: ToolExecutionContext;
 
   beforeEach(async () => {
     tempDir = await fs.mkdtemp(path.join(process.cwd(), "test-"));
+    context = { cwd: tempDir };
   });
 
   afterEach(async () => {
@@ -27,7 +28,7 @@ describe("listDirectoryTool", () => {
     await fs.writeFile(path.join(tempDir, "file2.txt"), "content");
     await fs.mkdir(path.join(tempDir, "subdir"));
 
-    const result = await listDirectoryTool.handler({ path: tempDir }, context);
+    const result = await listDirectoryTool.handler({ path: "." }, context);
 
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -39,7 +40,7 @@ describe("listDirectoryTool", () => {
   });
 
   it("returns empty list for empty directory", async () => {
-    const result = await listDirectoryTool.handler({ path: tempDir }, context);
+    const result = await listDirectoryTool.handler({ path: "." }, context);
 
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -48,10 +49,13 @@ describe("listDirectoryTool", () => {
   });
 
   it("returns error when directory does not exist", async () => {
-    const nonexistent = path.join(tempDir, "nonexistent");
+    const result = await listDirectoryTool.handler({ path: "nonexistent" }, context);
 
-    const result = await listDirectoryTool.handler({ path: nonexistent }, context);
+    expect(result.ok).toBe(false);
+  });
 
+  it("rejects a path that escapes the workspace root", async () => {
+    const result = await listDirectoryTool.handler({ path: ".." }, context);
     expect(result.ok).toBe(false);
   });
 });

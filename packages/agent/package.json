@@ -9,9 +9,6 @@
     "@cortex/shared": "*",
     "@cortex/llm": "*",
     "@cortex/tools": "*",
-    "@cortex/context": "*",
-    "@cortex/prompts": "*",
-    "@cortex/execution": "*",
-    "@cortex/planner": "*"
+    "@cortex/prompts": "*"
   }
 }
