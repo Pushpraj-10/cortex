@@ -9,11 +9,21 @@ interface MarkdownProps {
 type Block =
   | { type: "code"; language: string; content: string }
   | { type: "bullets"; items: string[] }
+  | { type: "heading"; level: number; text: string }
+  | { type: "table"; rows: string[][] }
   | { type: "paragraph"; text: string };
 
 const FENCE_PATTERN = /```(\w*)\n([\s\S]*?)```/g;
 const INLINE_PATTERN = /(\*\*[^*]+\*\*|`[^`]+`)/g;
 const BULLET_PATTERN = /^[-*]\s+/;
+const HEADING_PATTERN = /^(#{1,6})\s+(.*)$/;
+const TABLE_ROW_PATTERN = /^\|(.+)\|$/;
+const TABLE_SEPARATOR_PATTERN = /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?$/;
+
+/** Splits a `| a | b |` row into trimmed cells, dropping the leading/trailing pipes. */
+function splitTableRow(line: string): string[] {
+  return line.replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim());
+}
 
 /** Splits markdown source into code blocks, bullet lists, and paragraphs. */
 export function parseBlocks(source: string): Block[] {
@@ -35,11 +45,13 @@ export function parseBlocks(source: string): Block[] {
 }
 
 /**
- * Splits non-code text into bullet-list and paragraph blocks. Each blank-line group is
- * further split into runs of consecutive bullet lines vs. consecutive plain lines, so a
- * heading line immediately followed by a list (no blank line between them, e.g.
- * "Key points:\n- one\n- two") still renders the list as a list instead of falling back
- * to one flattened paragraph just because the group wasn't *entirely* bullets.
+ * Splits non-code text into heading, table, bullet-list, and paragraph blocks. Each
+ * blank-line group is further split into runs of consecutive lines of the same kind, so
+ * a heading or table immediately followed by prose (no blank line between them) still
+ * renders as its own block instead of being flattened into one paragraph just because
+ * the group wasn't entirely one thing. Headings and table rows must be pulled out
+ * before the generic paragraph fallback — otherwise `paragraphLines.join(" ")` splices
+ * a `### heading` or `| a | b |` row into the middle of a prose sentence.
  */
 function parseTextBlocks(text: string): Block[] {
   const blocks: Block[] = [];
@@ -52,6 +64,7 @@ function parseTextBlocks(text: string): Block[] {
     let i = 0;
     while (i < lines.length) {
       const line = lines[i]!;
+      const headingMatch = HEADING_PATTERN.exec(line);
       if (BULLET_PATTERN.test(line)) {
         const items: string[] = [];
         while (i < lines.length && BULLET_PATTERN.test(lines[i]!)) {
@@ -59,9 +72,24 @@ function parseTextBlocks(text: string): Block[] {
           i += 1;
         }
         blocks.push({ type: "bullets", items });
+      } else if (headingMatch) {
+        blocks.push({ type: "heading", level: headingMatch[1]!.length, text: headingMatch[2]! });
+        i += 1;
+      } else if (TABLE_ROW_PATTERN.test(line)) {
+        const rows: string[][] = [];
+        while (i < lines.length && TABLE_ROW_PATTERN.test(lines[i]!)) {
+          if (!TABLE_SEPARATOR_PATTERN.test(lines[i]!)) rows.push(splitTableRow(lines[i]!));
+          i += 1;
+        }
+        if (rows.length > 0) blocks.push({ type: "table", rows });
       } else {
         const paragraphLines: string[] = [];
-        while (i < lines.length && !BULLET_PATTERN.test(lines[i]!)) {
+        while (
+          i < lines.length &&
+          !BULLET_PATTERN.test(lines[i]!) &&
+          !HEADING_PATTERN.test(lines[i]!) &&
+          !TABLE_ROW_PATTERN.test(lines[i]!)
+        ) {
           paragraphLines.push(lines[i]!);
           i += 1;
         }
@@ -119,6 +147,30 @@ export function Markdown({ content }: MarkdownProps) {
                 <Text key={`${key}-item-${itemIndex}`}>
                   {"  • "}
                   {renderInline(item, `${key}-item-${itemIndex}`)}
+                </Text>
+              ))}
+            </Box>
+          );
+        }
+
+        if (block.type === "heading") {
+          return (
+            <Text key={key} bold color={colors.accent}>
+              {renderInline(block.text, key)}
+            </Text>
+          );
+        }
+
+        if (block.type === "table") {
+          const columnCount = Math.max(...block.rows.map((row) => row.length));
+          const widths = Array.from({ length: columnCount }, (_, col) =>
+            Math.max(...block.rows.map((row) => (row[col] ?? "").length)),
+          );
+          return (
+            <Box key={key} flexDirection="column">
+              {block.rows.map((row, rowIndex) => (
+                <Text key={`${key}-row-${rowIndex}`} bold={rowIndex === 0}>
+                  {row.map((cell, colIndex) => cell.padEnd(widths[colIndex] ?? 0)).join("  ")}
                 </Text>
               ))}
             </Box>
