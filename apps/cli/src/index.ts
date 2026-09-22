@@ -23,4 +23,11 @@ if (!result.ok) {
   process.exit(1);
 }
 
-render(React.createElement(App, { session: result.value.session, cwd, model: result.value.model }));
+render(
+  React.createElement(App, {
+    session: result.value.session,
+    cwd,
+    model: result.value.model,
+    provider: result.value.provider,
+  }),
+);

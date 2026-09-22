@@ -1,6 +1,7 @@
 export { loadDotEnv } from "./load-dot-env.js";
 export { parseDotEnv } from "./parse-dot-env.js";
 export { resolveOllamaConfig, MissingOllamaModelError } from "./resolve-ollama-config.js";
+export { resolveGroqConfig, MissingGroqApiKeyError, MissingGroqModelError } from "./resolve-groq-config.js";
 export { registerLlmProviders } from "./register-llm-providers.js";
 export { registerFileSystemTools } from "./register-file-system-tools.js";
 export { registerContextProviders } from "./register-context-providers.js";

@@ -22,13 +22,14 @@ export interface AppProps {
   session: AgentSession;
   cwd: string;
   model: string;
+  provider: string;
 }
 
 function nextId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function App({ session, cwd, model }: AppProps) {
+export function App({ session, cwd, model, provider }: AppProps) {
   useAltScreen();
   const { exit } = useApp();
   const { rows } = useTerminalSize();
@@ -233,7 +234,7 @@ export function App({ session, cwd, model }: AppProps) {
       {isThinking && <ThinkingIndicator active={isThinking} />}
       {slashMenuOpen && <SlashCommandMenu commands={filteredCommands} selectedIndex={clampedSlashIndex} />}
       <InputBox value={value} cursorOffset={cursorOffset} />
-      <StatusLine model={`${model} (ollama)`} cwd={cwd} />
+      <StatusLine model={`${model} (${provider})`} cwd={cwd} />
     </Box>
   );
 }

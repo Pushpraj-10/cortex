@@ -17,3 +17,9 @@ export { createOllamaClient } from "./ollama/client.js";
 export { ollamaProviderDescriptor } from "./ollama/descriptor.js";
 export { OllamaRequestError } from "./ollama/errors.js";
 export type { OllamaConfig } from "./ollama/config.js";
+
+// Groq provider
+export { createGroqClient } from "./groq/client.js";
+export { groqProviderDescriptor } from "./groq/descriptor.js";
+export { GroqRequestError } from "./groq/errors.js";
+export type { GroqConfig } from "./groq/config.js";
