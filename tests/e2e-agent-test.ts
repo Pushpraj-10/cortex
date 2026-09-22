@@ -15,7 +15,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-import { createOllamaClient } from "./packages/llm/src/ollama/client.js";
+import { createOllamaClient } from "../packages/llm/src/ollama/client.js";
 import {
   registerTool,
   readFileTool,
@@ -28,9 +28,9 @@ import {
   deleteFileTool,
   moveFileTool,
   copyFileTool,
-} from "./packages/tools/src/index.js";
-import { createAgentSession, createToolsExecutor } from "./packages/agent/src/index.js";
-import type { AgentEvent } from "./packages/agent/src/index.js";
+} from "../packages/tools/src/index.js";
+import { createAgentSession, createToolsExecutor } from "../packages/agent/src/index.js";
+import type { AgentEvent } from "../packages/agent/src/index.js";
 
 const BASE_URL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
 const MODEL = process.env.OLLAMA_MODEL ?? "llama3.1";

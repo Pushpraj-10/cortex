@@ -13,11 +13,11 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-import { registerFileSystemTools } from "./apps/cli/src/wiring/register-file-system-tools.js";
-import { registerLlmProviders } from "./apps/cli/src/wiring/register-llm-providers.js";
-import { createCliAgentSession } from "./apps/cli/src/wiring/create-cli-agent-session.js";
-import { isLlmFailureMessage } from "./apps/cli/src/format/classify-agent-message.js";
-import type { AgentEvent } from "./packages/agent/src/index.js";
+import { registerFileSystemTools } from "../apps/cli/src/wiring/register-file-system-tools.js";
+import { registerLlmProviders } from "../apps/cli/src/wiring/register-llm-providers.js";
+import { createCliAgentSession } from "../apps/cli/src/wiring/create-cli-agent-session.js";
+import { isLlmFailureMessage } from "../apps/cli/src/format/classify-agent-message.js";
+import type { AgentEvent } from "../packages/agent/src/index.js";
 
 function log(stage: string, detail?: unknown) {
   const ts = new Date().toISOString().split("T")[1]?.replace("Z", "");
