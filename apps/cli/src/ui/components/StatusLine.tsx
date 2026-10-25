@@ -1,6 +1,7 @@
 import React from "react";
 import { Text } from "ink";
-import { colors, statusHint } from "../theme.js";
+import { statusHint } from "../theme/copy.js";
+import { useTheme } from "../theme/ThemeContext.js";
 
 interface StatusLineProps {
   model: string;
@@ -9,8 +10,9 @@ interface StatusLineProps {
 }
 
 export function StatusLine({ model, mode, cwd }: StatusLineProps) {
+  const theme = useTheme();
   return (
-    <Text color={colors.muted} dimColor>
+    <Text color={theme.text.secondary} dimColor>
       {model} · {mode} · {cwd} · {statusHint}
     </Text>
   );

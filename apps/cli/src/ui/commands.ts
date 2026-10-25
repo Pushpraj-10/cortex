@@ -4,6 +4,7 @@
  */
 import { PERMISSION_MODES, isPermissionMode, type PermissionMode } from "@cortex/policy";
 import { PROVIDER_IDS, isProviderId, type ProviderId } from "../provider/config.js";
+import { THEME_NAMES, isThemeName, type ThemeName } from "./theme/themes.js";
 import type { SlashCommand } from "./types.js";
 
 export const slashCommands: SlashCommand[] = [
@@ -12,6 +13,7 @@ export const slashCommands: SlashCommand[] = [
   { name: "mode", description: "Show or set the permission mode" },
   { name: "provider", description: "Set up a provider's API key and model" },
   { name: "model", description: "Show the active model and provider" },
+  { name: "theme", description: "Show or switch the color theme" },
   { name: "quit", description: "Exit Cortex" },
 ];
 
@@ -22,6 +24,7 @@ export const HELP_TEXT = [
   "Keys: enter send · shift+enter newline · shift+tab next mode · esc interrupt · ctrl+t expand last tool call · ctrl+c quit",
   `Modes: ${PERMISSION_MODES.join(" | ")}`,
   `Providers: ${PROVIDER_IDS.join(" | ")} — /provider <name> sets one up; /provider remove <name> forgets its saved key`,
+  `Themes: ${THEME_NAMES.join(" | ")} — /theme <name> switches and remembers it`,
 ].join("\n");
 
 /** What a command can do. The UI supplies these; the command logic itself stays pure and testable. */
@@ -29,7 +32,10 @@ export interface CommandHost {
   mode: PermissionMode;
   model: string;
   provider: string;
+  theme: ThemeName;
   setMode(mode: PermissionMode): void;
+  /** Switches the colours now and remembers the choice. */
+  setTheme(theme: ThemeName): void;
   /** Starts the guided setup, at the picker or straight at one provider. */
   openProviderSetup(provider?: ProviderId): void;
   removeProvider(provider: ProviderId): void;
@@ -61,6 +67,18 @@ export function runSlashCommand(line: string, host: CommandHost): boolean {
     case "quit":
       host.quit();
       break;
+    case "theme": {
+      const requested = rest[0];
+      if (requested === undefined) {
+        host.notify(`Theme: ${host.theme}. Set one with /theme <${THEME_NAMES.join("|")}>.`);
+      } else if (isThemeName(requested)) {
+        host.setTheme(requested);
+        host.notify(`Theme: ${requested}`);
+      } else {
+        host.notify(`Unknown theme "${requested}". Use one of: ${THEME_NAMES.join(", ")}.`);
+      }
+      break;
+    }
     case "provider": {
       const [first, second] = rest;
       if (first === undefined) {

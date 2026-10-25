@@ -28,8 +28,15 @@ API keys, models and server URLs entered in the app (`/provider`) live in `~/.co
 - `removeProviderCredentials(provider, home?)` — returns whether anything was saved
 - Writes go to a temporary file created owner-only (`0600`, folder `0700`) and are renamed into place, so a crash can't leave a half-written or readable file. On Windows the permission bits are not enforced; the file is protected by your profile folder's access rules. It is plain text.
 
+## Preferences (`src/preferences.ts`)
+
+Cosmetic choices made in the app (today the `/theme`) live in `~/.cortex/preferences.json`: `{ "theme": "<name>" }`. Kept apart from settings (security-relevant, strict) and credentials (keys): **a missing, unreadable or malformed file is read as "nothing chosen"**, because a damaged preference must never stop the app. The theme is a plain string here; the UI validates it.
+
+- `loadPreferences(home?)` — never throws
+- `savePreferences(values, home?)` — merges over what was saved, written through a temporary file and a rename
+
 ## Files
 
-`settings.ts` · `memory.ts` · `credentials.ts`. Depends on `@cortex/policy` and `@cortex/extensions` for types, and on `isPermissionMode` for validation.
+`settings.ts` · `memory.ts` · `credentials.ts` · `preferences.ts`. Depends on `@cortex/policy` and `@cortex/extensions` for types, and on `isPermissionMode` for validation.
 
 Tests: `npm test -w @cortex/config`.

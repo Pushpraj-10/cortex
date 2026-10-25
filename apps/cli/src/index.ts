@@ -1,11 +1,13 @@
 #!/usr/bin/env -S npx tsx
 import React from "react";
 import { render } from "ink";
+import { loadPreferences, savePreferences } from "@cortex/config";
 import { App } from "./ui/App.js";
 import { USAGE, parseArgs } from "./cli/args.js";
 import { bootstrap } from "./runtime/bootstrap.js";
 import { loadDotEnv } from "./cli/env.js";
 import { runOnce } from "./cli/run-once.js";
+import { readVersion } from "./cli/version.js";
 
 const args = parseArgs(process.argv.slice(2));
 if (!args.ok) {
@@ -33,6 +35,20 @@ if (args.value.prompt !== undefined) {
   process.exit(exitCode);
 }
 
-const app = render(React.createElement(App, { initialSession, newSession, policy, permissions, cwd, providers }));
+const preferences = await loadPreferences();
+const app = render(
+  React.createElement(App, {
+    initialSession,
+    newSession,
+    policy,
+    permissions,
+    cwd,
+    providers,
+    version: readVersion(),
+    initialTheme: preferences.theme,
+    // A theme that can't be remembered is not worth interrupting the session for.
+    onThemeChange: (theme) => void savePreferences({ theme }).catch(() => undefined),
+  }),
+);
 await app.waitUntilExit();
 close();

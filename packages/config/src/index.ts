@@ -5,6 +5,7 @@
 
 export { loadSettings, type Settings } from "./settings.js";
 export { loadMemory } from "./memory.js";
+export { loadPreferences, preferencesPath, savePreferences, type Preferences } from "./preferences.js";
 export {
   credentialsPath,
   loadCredentials,

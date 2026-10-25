@@ -34,6 +34,7 @@ npm run build             # bundle the installable package into apps/cli/dist
 | `/mode [name]` | show or set the permission mode |
 | `/provider [name]` | set up a provider's API key and model, and switch to it (`/provider remove <name>` forgets it) |
 | `/model` | show the active model and provider |
+| `/theme [name]` | show or switch the color theme (`dark`, `light`, `mono`); remembered in `~/.cortex/preferences.json`, and `NO_COLOR` always forces `mono` |
 | `/quit` | exit |
 
 Keys: `enter` sends, `shift+enter` adds a newline, `shift+tab` cycles the permission mode, `esc` interrupts, `ctrl+t` expands the last tool call, `ctrl+c` quits. Name files in your message (`fix src/parser.ts`) and the agent is handed those files, their imports and tests, and what imports them.

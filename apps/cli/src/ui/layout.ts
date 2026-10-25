@@ -3,7 +3,7 @@
  * pieces below it leave, so those heights are computed in one place instead of being scattered
  * through the component. A bordered box costs 2 extra rows (top and bottom border).
  */
-import { maxInputBoxLines } from "./theme.js";
+import { maxInputBoxLines } from "./theme/copy.js";
 
 const BORDER_ROWS = 2;
 const STATUS_LINE_ROWS = 1;

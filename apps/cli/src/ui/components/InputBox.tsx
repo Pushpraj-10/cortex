@@ -2,7 +2,8 @@ import React from "react";
 import { Box, Text } from "ink";
 import { maskValue } from "../../provider/setup.js";
 import { locateCursor } from "../hooks/useTextInput.js";
-import { colors, maxInputBoxLines, placeholder } from "../theme.js";
+import { maxInputBoxLines, placeholder } from "../theme/copy.js";
+import { useTheme } from "../theme/ThemeContext.js";
 
 interface InputBoxProps {
   value: string;
@@ -12,6 +13,7 @@ interface InputBoxProps {
 }
 
 export function InputBox({ value, cursorOffset, mask = false }: InputBoxProps) {
+  const theme = useTheme();
   const display = mask ? maskValue(value) : value;
   const isEmpty = display.length === 0;
   const lines = isEmpty ? [""] : display.split("\n");
@@ -19,12 +21,12 @@ export function InputBox({ value, cursorOffset, mask = false }: InputBoxProps) {
   const contentHeight = Math.min(lines.length, maxInputBoxLines);
 
   return (
-    <Box borderStyle="round" borderColor={colors.accent} paddingX={1} width="100%">
-      <Text color={colors.accent}>{"> "}</Text>
+    <Box borderStyle="round" borderColor={theme.border.focus} paddingX={1} width="100%">
+      <Text color={theme.text.accent}>{"> "}</Text>
       {isEmpty ? (
         <Text>
           <Text inverse> </Text>
-          <Text color={colors.muted} dimColor>
+          <Text color={theme.text.secondary} dimColor>
             {placeholder}
           </Text>
         </Text>

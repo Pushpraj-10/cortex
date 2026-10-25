@@ -6,7 +6,9 @@ function host(overrides: Partial<CommandHost> = {}): CommandHost {
     mode: "default",
     model: "llama3.1",
     provider: "ollama",
+    theme: "dark",
     setMode: vi.fn(),
+    setTheme: vi.fn(),
     openProviderSetup: vi.fn(),
     removeProvider: vi.fn(),
     clear: vi.fn(),
@@ -65,6 +67,29 @@ describe("runSlashCommand", () => {
     runSlashCommand("/mode yolo", h);
     expect(h.setMode).not.toHaveBeenCalled();
     expect(vi.mocked(h.notify).mock.calls[0]![0]).toContain('Unknown mode "yolo"');
+  });
+
+  it("/theme with no argument shows the current theme and the choices", () => {
+    const h = host({ theme: "light" });
+    runSlashCommand("/theme", h);
+    expect(h.setTheme).not.toHaveBeenCalled();
+    const shown = vi.mocked(h.notify).mock.calls[0]![0];
+    expect(shown).toContain("Theme: light");
+    expect(shown).toContain("dark|light|mono");
+  });
+
+  it("/theme <name> switches to a valid theme and confirms it", () => {
+    const h = host();
+    runSlashCommand("/theme mono", h);
+    expect(h.setTheme).toHaveBeenCalledWith("mono");
+    expect(h.notify).toHaveBeenCalledWith("Theme: mono");
+  });
+
+  it("/theme <bad> reports the valid themes and changes nothing", () => {
+    const h = host();
+    runSlashCommand("/theme neon", h);
+    expect(h.setTheme).not.toHaveBeenCalled();
+    expect(vi.mocked(h.notify).mock.calls[0]![0]).toContain('Unknown theme "neon"');
   });
 
   it("reports an unknown /command instead of sending it to the model", () => {

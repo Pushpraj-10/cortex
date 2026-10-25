@@ -1,23 +1,31 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Box, Text } from "ink";
-import { bannerArt, colors, tagline } from "../theme.js";
+import { useTerminalSize } from "../hooks/terminal.js";
+import { Logo } from "../logo/Logo.js";
+import { pickTip, tagline } from "../theme/copy.js";
+import { useTheme } from "../theme/ThemeContext.js";
 
 interface BannerProps {
   cwd: string;
+  version: string;
 }
 
-export function Banner({ cwd }: BannerProps) {
+/** The header at the top of the transcript: the wordmark, the version and tagline, the folder, and one tip. */
+export function Banner({ cwd, version }: BannerProps) {
+  const theme = useTheme();
+  const { columns } = useTerminalSize();
+  const tip = useMemo(() => pickTip(), []);
+
   return (
     <Box flexDirection="column" marginBottom={1}>
-      <Box borderStyle="round" borderColor={colors.accent} flexDirection="column" paddingX={1}>
-        {bannerArt.map((line, i) => (
-          <Text key={i} color={colors.accent} bold>
-            {line}
-          </Text>
-        ))}
+      <Logo columns={columns} />
+      <Box marginTop={1}>
+        <Text color={theme.text.secondary}>
+          {tagline} · v{version}
+        </Text>
       </Box>
-      <Text color={colors.muted}>{tagline}</Text>
-      <Text color={colors.muted}>{cwd}</Text>
+      <Text color={theme.text.secondary}>{cwd}</Text>
+      <Text color={theme.text.secondary}>Tip: {tip}</Text>
     </Box>
   );
 }

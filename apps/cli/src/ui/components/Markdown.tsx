@@ -2,7 +2,8 @@
 import React from "react";
 import { Box, Text } from "ink";
 import { parseBlocks } from "../../format/markdown.js";
-import { colors } from "../theme.js";
+import type { Theme } from "../theme/themes.js";
+import { useTheme } from "../theme/ThemeContext.js";
 
 interface MarkdownProps {
   content: string;
@@ -11,7 +12,7 @@ interface MarkdownProps {
 const INLINE_PATTERN = /(\*\*[^*]+\*\*|`[^`]+`)/g;
 
 /** Renders **bold** and `code span` runs inside a single line of text. */
-function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
+function renderInline(text: string, keyPrefix: string, theme: Theme): React.ReactNode[] {
   return text.split(INLINE_PATTERN).map((part, i) => {
     const key = `${keyPrefix}-${i}`;
     if (part.startsWith("**") && part.endsWith("**")) {
@@ -23,7 +24,7 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
     }
     if (part.startsWith("`") && part.endsWith("`")) {
       return (
-        <Text key={key} color={colors.accent}>
+        <Text key={key} color={theme.text.accent}>
           {part.slice(1, -1)}
         </Text>
       );
@@ -33,6 +34,7 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
 }
 
 export function Markdown({ content }: MarkdownProps) {
+  const theme = useTheme();
   const blocks = parseBlocks(content);
 
   return (
@@ -41,7 +43,7 @@ export function Markdown({ content }: MarkdownProps) {
         const key = `block-${i}`;
         if (block.type === "code") {
           return (
-            <Box key={key} flexDirection="column" borderStyle="round" borderColor={colors.muted} paddingX={1}>
+            <Box key={key} flexDirection="column" borderStyle="round" borderColor={theme.border.default} paddingX={1}>
               {block.content.split("\n").map((line, lineIndex) => (
                 <Text key={`${key}-line-${lineIndex}`}>{line}</Text>
               ))}
@@ -55,7 +57,7 @@ export function Markdown({ content }: MarkdownProps) {
               {block.items.map((item, itemIndex) => (
                 <Text key={`${key}-item-${itemIndex}`}>
                   {"  • "}
-                  {renderInline(item, `${key}-item-${itemIndex}`)}
+                  {renderInline(item, `${key}-item-${itemIndex}`, theme)}
                 </Text>
               ))}
             </Box>
@@ -64,8 +66,8 @@ export function Markdown({ content }: MarkdownProps) {
 
         if (block.type === "heading") {
           return (
-            <Text key={key} bold color={colors.accent}>
-              {renderInline(block.text, key)}
+            <Text key={key} bold color={theme.text.accent}>
+              {renderInline(block.text, key, theme)}
             </Text>
           );
         }
@@ -88,7 +90,7 @@ export function Markdown({ content }: MarkdownProps) {
 
         return (
           <Text key={key} wrap="wrap">
-            {renderInline(block.text, key)}
+            {renderInline(block.text, key, theme)}
           </Text>
         );
       })}

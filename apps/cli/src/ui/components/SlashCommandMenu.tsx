@@ -1,6 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
-import { colors } from "../theme.js";
+import { useTheme } from "../theme/ThemeContext.js";
 import type { SlashCommand } from "../types.js";
 
 interface SlashCommandMenuProps {
@@ -11,22 +11,23 @@ interface SlashCommandMenuProps {
 }
 
 export function SlashCommandMenu({ commands, selectedIndex, prefix = "/" }: SlashCommandMenuProps) {
+  const theme = useTheme();
   if (commands.length === 0) {
     return (
-      <Box borderStyle="round" borderColor={colors.muted} paddingX={1}>
-        <Text color={colors.muted}>No matching commands</Text>
+      <Box borderStyle="round" borderColor={theme.border.default} paddingX={1}>
+        <Text color={theme.text.secondary}>No matching commands</Text>
       </Box>
     );
   }
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={colors.accent} paddingX={1}>
+    <Box flexDirection="column" borderStyle="round" borderColor={theme.border.focus} paddingX={1}>
       {commands.map((command, i) => {
         const selected = i === selectedIndex;
         return (
-          <Text key={command.name} color={selected ? colors.accent : undefined} bold={selected}>
+          <Text key={command.name} color={selected ? theme.text.accent : undefined} bold={selected}>
             {selected ? "› " : "  "}{prefix}{command.name}
-            <Text color={colors.muted}> — {command.description}</Text>
+            <Text color={theme.text.secondary}> — {command.description}</Text>
           </Text>
         );
       })}

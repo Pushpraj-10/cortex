@@ -13,7 +13,7 @@ npm run build                        # bundle the installable package into dist/
 
 Configuration comes from the environment or a `.env` in the working directory; see the root `.env.example` and README. In `-p` runs nobody can approve a call, so anything that needs approval is refused (with a hint) unless `--mode` or an allow rule covers it. To try it as a command from source, `npm link` in this folder (`bin.cortex` runs `src/index.ts` through `tsx`); users install the bundled package from `dist/` instead.
 
-With nothing configured the UI still opens, and tells you to run `/provider` to enter an API key and model (see the root README for where they are saved). In the UI: `/help`, `/clear`, `/mode`, `/provider`, `/model`, `/quit`; `enter` sends, `shift+enter` newline, `shift+tab` cycles the permission mode, `esc` interrupts (a real `AbortSignal` down to the HTTP request), `ctrl+t` expands the last tool call, `ctrl+c` quits. When the agent needs approval a prompt takes over: `y`/`enter` allows, `n`/`esc` refuses.
+With nothing configured the UI still opens, and tells you to run `/provider` to enter an API key and model (see the root README for where they are saved). In the UI: `/help`, `/clear`, `/mode`, `/provider`, `/model`, `/theme`, `/quit`; `enter` sends, `shift+enter` newline, `shift+tab` cycles the permission mode, `esc` interrupts (a real `AbortSignal` down to the HTTP request), `ctrl+t` expands the last tool call, `ctrl+c` quits. When the agent needs approval a prompt takes over: `y`/`enter` allows, `n`/`esc` refuses.
 
 ## Structure
 
@@ -27,11 +27,13 @@ index.ts ─► cli/ ─► runtime/ ─► provider/        cli/ also uses form
 | Folder | Job | Files |
 | --- | --- | --- |
 | `index.ts` | the entry: parse flags, load `.env`, bootstrap, then render the UI or run one shot | |
-| `cli/` | how the process is driven from the command line | `args.ts` (flags), `env.ts` (`.env` loading; real environment variables win), `run-once.ts` (the `-p` path) |
+| `cli/` | how the process is driven from the command line | `args.ts` (flags), `env.ts` (`.env` loading; real environment variables win), `run-once.ts` (the `-p` path), `version.ts` (the version shown in the header) |
 | `runtime/` | building the agent stack, and the seam to the UI | `bootstrap.ts` (the composition root: registers providers, tools and context providers; loads settings, memory, skills and MCP servers; builds the shared `AgentPolicy` and sessions), `permission-bridge.ts` (how the agent's approval request reaches the UI and back) |
 | `provider/` | choosing and configuring the LLM provider; no React, no Ink | `config.ts` (picks the provider and resolves its config from the environment, with saved settings layered underneath; empty values count as unset), `manager.ts` (the running app's provider: a delegating client, what is saved, and `configure` / `remove` that save and switch without a restart; nothing it returns contains a key), `setup.ts` (the `/provider` questions and the pure state machine that walks them) |
 | `format/` | how tool calls and markdown are described; shared by `cli/` and `ui/` | `tool-calls.ts` (summaries from each tool's own `summarize`, result detail, failure detection), `markdown.ts` (the parser behind the transcript) |
-| `ui/` | everything that draws the screen or handles keys | `App.tsx` (composes the screen, handles keys), `commands.ts` (slash commands, pure logic over a `CommandHost`), `layout.ts` (rows left for the transcript), `theme.ts` (colors and copy; retheme here), `types.ts` (transcript entries) |
+| `ui/` | everything that draws the screen or handles keys | `App.tsx` (composes the screen, handles keys), `commands.ts` (slash commands, pure logic over a `CommandHost`), `layout.ts` (rows left for the transcript), `types.ts` (transcript entries) |
+| `ui/theme/` | colors and words, in one place | `themes.ts` (semantic color tokens and the `dark` / `light` / `mono` themes; `NO_COLOR` forces mono), `ThemeContext.ts` (`useTheme()`; components never hardcode a color), `gradient.ts` (pure hex blending), `copy.ts` (taglines, hints, tips, fixed sizes) |
+| `ui/logo/` | the wordmark | `pixel-logo.ts` (a 5x7 bitmap font packed two pixels per cell with half-blocks, in three widths), `Logo.tsx` (colors it along the theme gradient) |
 | `ui/components/` | the pieces on screen | `Banner`, `InputBox` (can mask a secret), `Messages` (messages, tool calls, notices, the scrolling viewport), `Markdown`, `Prompts` (the approval prompt and the `/provider` question), `SlashCommandMenu` (also the provider picker), `StatusLine`, `ThinkingIndicator` |
 | `ui/hooks/` | state behind the components | `useChat` (transcript, cancel, pending approval, expanded tool calls), `useTextInput` (input state, with the pure text-editing functions beside it), `useInputHistory` (up/down recall), `useProviderSetup` (drives the `/provider` flow), `terminal` (alt screen and size), `animation` (spinner, verb, elapsed time) |
 

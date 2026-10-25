@@ -19,6 +19,8 @@ import { useAltScreen, useTerminalSize } from "./hooks/terminal.js";
 import { slashMenuRows, transcriptRows } from "./layout.js";
 import type { PermissionBridge } from "../runtime/permission-bridge.js";
 import type { ProviderManager } from "../provider/manager.js";
+import { ThemeContext } from "./theme/ThemeContext.js";
+import { getTheme, resolveThemeName, type ThemeName } from "./theme/themes.js";
 import type { SlashCommand } from "./types.js";
 
 export interface AppProps {
@@ -31,10 +33,18 @@ export interface AppProps {
   cwd: string;
   /** The active provider, its saved settings, and how to change them (the /provider command). */
   providers: ProviderManager;
+  /** Shown in the header. */
+  version: string;
+  /** The saved theme name, if any; `NO_COLOR` overrides it. */
+  initialTheme?: string;
+  /** Called when /theme picks a theme, so the choice can be remembered. */
+  onThemeChange?(theme: ThemeName): void;
 }
 
-export function App({ initialSession, newSession, policy, permissions, cwd, providers }: AppProps) {
+export function App({ initialSession, newSession, policy, permissions, cwd, providers, version, initialTheme, onThemeChange }: AppProps) {
   useAltScreen();
+  const [themeName, setThemeName] = useState<ThemeName>(() => resolveThemeName(initialTheme, {}));
+  const theme = getTheme(resolveThemeName(themeName));
   const { exit } = useApp();
   const { rows } = useTerminalSize();
 
@@ -81,7 +91,12 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
     mode,
     model: active?.model ?? "none",
     provider: active?.provider ?? "not configured — type /provider",
+    theme: themeName,
     setMode,
+    setTheme: (next) => {
+      setThemeName(next);
+      onThemeChange?.(next);
+    },
     openProviderSetup: setup.begin,
     removeProvider: setup.remove,
     clear: () => {
@@ -227,15 +242,17 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
   });
 
   return (
-    <Box flexDirection="column" height={rows}>
-      <MessageList cwd={cwd} height={listHeight} timeline={chat.timeline} expandedToolCallIds={chat.expandedToolCallIds} />
-      {showThinking && <ThinkingIndicator active />}
-      {request && <PermissionPrompt summary={summarizeToolCall(request.toolName, request.args)} />}
-      {pickerOpen && <SlashCommandMenu commands={setup.menu} selectedIndex={setup.selectedIndex} prefix="" />}
-      {setup.prompt && <SetupPrompt title={setup.prompt.title} label={setup.prompt.label} hint={setup.prompt.hint} error={setup.prompt.error} />}
-      {slashMenuOpen && <SlashCommandMenu commands={filteredCommands} selectedIndex={clampedSlashIndex} />}
-      <InputBox value={input.value} cursorOffset={input.cursorOffset} mask={setup.prompt?.secret === true} />
-      <StatusLine model={active ? `${active.model} (${active.provider})` : "no provider"} mode={mode} cwd={cwd} />
-    </Box>
+    <ThemeContext.Provider value={theme}>
+      <Box flexDirection="column" height={rows}>
+        <MessageList cwd={cwd} version={version} height={listHeight} timeline={chat.timeline} expandedToolCallIds={chat.expandedToolCallIds} />
+        {showThinking && <ThinkingIndicator active />}
+        {request && <PermissionPrompt summary={summarizeToolCall(request.toolName, request.args)} />}
+        {pickerOpen && <SlashCommandMenu commands={setup.menu} selectedIndex={setup.selectedIndex} prefix="" />}
+        {setup.prompt && <SetupPrompt title={setup.prompt.title} label={setup.prompt.label} hint={setup.prompt.hint} error={setup.prompt.error} />}
+        {slashMenuOpen && <SlashCommandMenu commands={filteredCommands} selectedIndex={clampedSlashIndex} />}
+        <InputBox value={input.value} cursorOffset={input.cursorOffset} mask={setup.prompt?.secret === true} />
+        <StatusLine model={active ? `${active.model} (${active.provider})` : "no provider"} mode={mode} cwd={cwd} />
+      </Box>
+    </ThemeContext.Provider>
   );
 }

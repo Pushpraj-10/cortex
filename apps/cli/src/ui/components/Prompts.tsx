@@ -1,6 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
-import { colors } from "../theme.js";
+import { useTheme } from "../theme/ThemeContext.js";
 
 // The two prompts that take over the area above the input box. Each is two lines of text plus a border,
 // and exports its row count so the layout can reserve exactly that much.
@@ -11,12 +11,13 @@ export const PERMISSION_PROMPT_ROWS = 4;
 
 /** Shown while the agent waits for approval of a tool call. The keys are handled by App. */
 export function PermissionPrompt({ summary }: { summary: string }) {
+  const theme = useTheme();
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={colors.accent} paddingX={1}>
+    <Box flexDirection="column" borderStyle="round" borderColor={theme.border.focus} paddingX={1}>
       <Text>
         Allow <Text bold>{summary}</Text>?
       </Text>
-      <Text color={colors.muted}>y / enter allow · n / esc deny</Text>
+      <Text color={theme.text.secondary}>y / enter allow · n / esc deny</Text>
     </Box>
   );
 }
@@ -38,15 +39,16 @@ interface SetupPromptProps {
 
 /** The question shown above the input box during `/provider`. The answer is typed into the input box itself. */
 export function SetupPrompt({ title, label, hint, error }: SetupPromptProps) {
+  const theme = useTheme();
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={colors.accent} paddingX={1}>
+    <Box flexDirection="column" borderStyle="round" borderColor={theme.border.focus} paddingX={1}>
       <Text>
         <Text bold>{title}</Text> — {label}
       </Text>
       {error ? (
-        <Text color={colors.error}>{error}</Text>
+        <Text color={theme.status.error}>{error}</Text>
       ) : (
-        <Text color={colors.muted}>{hint} · enter to confirm · esc to cancel</Text>
+        <Text color={theme.text.secondary}>{hint} · enter to confirm · esc to cancel</Text>
       )}
     </Box>
   );

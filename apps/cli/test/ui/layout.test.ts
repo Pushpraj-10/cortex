@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { inputTextRows, slashMenuRows, transcriptRows } from "../../src/ui/layout.js";
-import { maxInputBoxLines } from "../../src/ui/theme.js";
+import { maxInputBoxLines } from "../../src/ui/theme/copy.js";
 
 describe("inputTextRows", () => {
   it("is one row per line typed, at least one", () => {
