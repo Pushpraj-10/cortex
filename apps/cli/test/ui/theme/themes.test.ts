@@ -5,7 +5,13 @@ const HEX = /^#[0-9a-f]{6}$/i;
 
 function tokenValues(name: (typeof THEME_NAMES)[number]): (string | undefined)[] {
   const theme = getTheme(name);
-  return [...Object.values(theme.text), ...Object.values(theme.status), ...Object.values(theme.diff), ...Object.values(theme.border)];
+  return [
+    ...Object.values(theme.text),
+    ...Object.values(theme.status),
+    ...Object.values(theme.diff),
+    ...Object.values(theme.border),
+    ...Object.values(theme.syntax),
+  ];
 }
 
 describe("themes", () => {

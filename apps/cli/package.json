@@ -11,17 +11,18 @@
     "test": "vitest run --root ../.. apps/cli/"
   },
   "dependencies": {
-    "ink": "^5.0.1",
-    "react": "^18.3.1",
-    "tsx": "^4.19.1",
-    "@cortex/core": "*",
-    "@cortex/providers": "*",
-    "@cortex/tools": "*",
+    "@cortex/agent": "*",
     "@cortex/config": "*",
     "@cortex/context": "*",
+    "@cortex/core": "*",
     "@cortex/extensions": "*",
     "@cortex/policy": "*",
-    "@cortex/agent": "*"
+    "@cortex/providers": "*",
+    "@cortex/tools": "*",
+    "ink": "^5.0.1",
+    "lowlight": "^3.3.0",
+    "react": "^18.3.1",
+    "tsx": "^4.19.1"
   },
   "devDependencies": {
     "@types/react": "^18.3.3"

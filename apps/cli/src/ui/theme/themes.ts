@@ -32,6 +32,8 @@ export interface Theme {
     default: string | undefined;
     focus: string | undefined;
   };
+  /** Code colours, one per scope the highlighter reports (see format/highlight.ts). */
+  syntax: Record<"keyword" | "string" | "number" | "comment" | "title" | "type" | "builtin", string | undefined>;
   /** Colour stops for the logo, left to right; empty means a single flat colour. */
   gradient: string[];
 }
@@ -42,6 +44,7 @@ const dark: Theme = {
   status: { success: "#8CC084", warning: "#E5C07B", error: "#F87171" },
   diff: { added: "#1F3A2A", removed: "#4A2327" },
   border: { default: "#4B5563", focus: "#D4A05F" },
+  syntax: { keyword: "#C678DD", string: "#98C379", number: "#D19A66", comment: "#7F848E", title: "#61AFEF", type: "#E5C07B", builtin: "#56B6C2" },
   gradient: ["#F4C97B", "#D4A05F", "#C8664F"],
 };
 
@@ -51,6 +54,7 @@ const light: Theme = {
   status: { success: "#2E7D32", warning: "#9A6700", error: "#C62828" },
   diff: { added: "#D5F0DC", removed: "#F9D7D7" },
   border: { default: "#9CA3AF", focus: "#9A5B13" },
+  syntax: { keyword: "#8250DF", string: "#116329", number: "#953800", comment: "#6E7781", title: "#0550AE", type: "#7D4E00", builtin: "#0A6E6E" },
   gradient: ["#B9741C", "#9A5B13", "#8F3F2B"],
 };
 
@@ -60,6 +64,7 @@ const mono: Theme = {
   status: { success: undefined, warning: undefined, error: undefined },
   diff: { added: undefined, removed: undefined },
   border: { default: undefined, focus: undefined },
+  syntax: { keyword: undefined, string: undefined, number: undefined, comment: undefined, title: undefined, type: undefined, builtin: undefined },
   gradient: [],
 };
 

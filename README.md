@@ -114,3 +114,7 @@ npm run test:e2e         # live-model scripts in tests/ (needs Ollama running)
 Conventions: related small things live in one commented file per feature rather than one function per file, and each package's `test/` mirrors its `src/`. Commit messages follow [CLAUDE.md](CLAUDE.md).
 
 Known limits: no streaming yet, and `run_command` is gated only by approval, not sandboxed.
+
+## Acknowledgements
+
+The terminal UI's markdown, code and tool-call presentation was designed after studying [Gemini CLI](https://github.com/google-gemini/gemini-cli) (Apache-2.0), which is also built on Ink. The parsers and components here are written from scratch for Cortex's structure; no code was copied.

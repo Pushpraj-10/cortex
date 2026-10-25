@@ -3,13 +3,18 @@ import React from "react";
 import { Box, Text } from "ink";
 import { useTheme } from "../theme/ThemeContext.js";
 import type { MessageEntry, NoticeEntry, TimelineEntry, ToolCallEntry } from "../types.js";
+import { useTerminalSize } from "../hooks/terminal.js";
+import { Markdown } from "../markdown/Markdown.js";
 import { Banner } from "./Banner.js";
-import { Markdown } from "./Markdown.js";
 
 // ---- Message ---------------------------------------------------------------------
 
+/** Columns taken by the left margin of an assistant message. */
+const ASSISTANT_INDENT = 2;
+
 export function MessageBubble({ message }: { message: MessageEntry }) {
   const theme = useTheme();
+  const { columns } = useTerminalSize();
   if (message.role === "user") {
     return (
       <Box marginBottom={1}>
@@ -28,8 +33,8 @@ export function MessageBubble({ message }: { message: MessageEntry }) {
   }
 
   return (
-    <Box flexDirection="column" marginBottom={1} marginLeft={2}>
-      <Markdown content={message.content} />
+    <Box flexDirection="column" marginBottom={1} marginLeft={ASSISTANT_INDENT}>
+      <Markdown content={message.content} width={Math.max(10, columns - ASSISTANT_INDENT)} />
     </Box>
   );
 }
