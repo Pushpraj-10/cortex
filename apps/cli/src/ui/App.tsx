@@ -3,7 +3,7 @@ import { Box, useApp, useInput } from "ink";
 import type { AgentPolicy, AgentSession } from "@cortex/agent";
 import { PERMISSION_MODES, type PermissionMode } from "@cortex/policy";
 
-import { runSlashCommand, slashCommands, type CommandHost } from "./commands.js";
+import { HELP_TEXT, runSlashCommand, slashCommands, type CommandHost } from "./commands.js";
 import { InputBox } from "./components/InputBox.js";
 import { MessageList } from "./components/Messages.js";
 import { PermissionPrompt, SETUP_PROMPT_ROWS, SetupPrompt, permissionPromptRows } from "./components/Prompts.js";
@@ -19,6 +19,7 @@ import { useAltScreen, useTerminalSize } from "./hooks/terminal.js";
 import { slashMenuRows, transcriptRows } from "./layout.js";
 import type { PermissionBridge } from "../runtime/permission-bridge.js";
 import type { ProviderManager } from "../provider/manager.js";
+import { pickPlaceholder } from "./theme/copy.js";
 import { ThemeContext } from "./theme/ThemeContext.js";
 import { getTheme, resolveThemeName, type ThemeName } from "./theme/themes.js";
 import type { SlashCommand } from "./types.js";
@@ -50,6 +51,7 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
 
   const [session, setSession] = useState(initialSession);
   const chat = useChat(session, permissions, cwd);
+  const placeholder = useMemo(() => pickPlaceholder(), []);
   const input = useTextInput();
   const [mode, setModeState] = useState<PermissionMode>(policy.mode);
   const [submitted, setSubmitted] = useState<string[]>([]);
@@ -225,6 +227,12 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
         return;
       }
 
+      // `?` in an empty box asks for the shortcuts (the footer says so) instead of typing a question mark.
+      if (typed === "?" && input.value === "" && setup.stage === "idle") {
+        chat.notify(HELP_TEXT);
+        return;
+      }
+
       if (typed) input.insert(typed);
     },
     { isActive: process.stdin.isTTY === true },
@@ -259,7 +267,7 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
         {pickerOpen && <SlashCommandMenu commands={setup.menu} selectedIndex={setup.selectedIndex} prefix="" />}
         {setup.prompt && <SetupPrompt title={setup.prompt.title} label={setup.prompt.label} hint={setup.prompt.hint} error={setup.prompt.error} />}
         {slashMenuOpen && <SlashCommandMenu commands={filteredCommands} selectedIndex={clampedSlashIndex} />}
-        <InputBox value={input.value} cursorOffset={input.cursorOffset} mask={setup.prompt?.secret === true} />
+        <InputBox value={input.value} cursorOffset={input.cursorOffset} mask={setup.prompt?.secret === true} placeholder={placeholder} />
         <StatusLine model={active ? `${active.model} (${active.provider})` : "no provider"} mode={mode} cwd={cwd} />
       </Box>
     </ThemeContext.Provider>

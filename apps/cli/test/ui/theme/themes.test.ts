@@ -10,10 +10,20 @@ function colours(theme: Theme): (string | undefined)[] {
     theme.secondary,
     theme.muted,
     theme.border,
+    theme.inputBackground,
     ...Object.values(theme.status),
     ...Object.values(theme.diff),
     ...Object.values(theme.syntax),
   ];
+}
+
+/** HSL saturation, 0 to 1: how far a colour is from grey. */
+function saturation(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255) as [number, number, number];
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const lightness = (max + min) / 2;
+  return max === min ? 0 : (max - min) / (1 - Math.abs(2 * lightness - 1));
 }
 
 /** WCAG relative luminance and contrast ratio. */
@@ -44,6 +54,17 @@ describe("themes", () => {
       expect(theme.primary).not.toBe(theme.secondary);
       expect(theme.status.error).not.toBe(theme.primary);
       expect(theme.status.error).not.toBe(theme.secondary);
+    }
+  });
+
+  it("keeps every coloured token soft: nothing is saturated enough to glow", () => {
+    for (const name of ["dark", "light"] as const) {
+      const theme = getTheme(name);
+      for (const [label, colour] of Object.entries({ primary: theme.primary, secondary: theme.secondary, ...theme.status, ...theme.syntax })) {
+        expect(saturation(colour as string), `${name} ${label} ${colour}`).toBeLessThan(0.6);
+      }
+      expect(saturation(theme.primary as string)).toBeLessThan(0.5);
+      expect(saturation(theme.secondary as string)).toBeLessThan(0.5);
     }
   });
 

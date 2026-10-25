@@ -37,7 +37,7 @@ npm run build             # bundle the installable package into apps/cli/dist
 | `/theme [name]` | show or switch the color theme (`dark`, `light`, `mono`); remembered in `~/.cortex/preferences.json`, and `NO_COLOR` always forces `mono` |
 | `/quit` | exit |
 
-Keys: `enter` sends, `shift+enter` adds a newline, `shift+tab` cycles the permission mode, `esc` interrupts, `ctrl+t` expands the last tool call, `ctrl+c` quits. Name files in your message (`fix src/parser.ts`) and the agent is handed those files, their imports and tests, and what imports them.
+Keys: `enter` sends, `shift+enter` adds a newline, `shift+tab` cycles the permission mode, `esc` interrupts, `ctrl+t` expands the last tool call, `?` in an empty box shows these shortcuts, `ctrl+c` quits. Name files in your message (`fix src/parser.ts`) and the agent is handed those files, their imports and tests, and what imports them.
 
 Flags: `--mode <mode>` sets the permission mode, `-p <prompt>` runs one prompt without the UI (tool calls go to stderr, the answer to stdout, and anything needing approval is refused unless the mode or a rule allows it).
 

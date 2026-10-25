@@ -3,9 +3,9 @@
  * background", never for a hex value, so a theme is a complete restyle and nothing else changes.
  * `undefined` means "the terminal's own default", which is what the mono theme uses throughout.
  *
- * The palette is deliberately small: two brand colours (mint and sky), neutral greys, and amber and red
- * kept for warnings and errors. Syntax colours are drawn from the same few hues, so code, prose and chrome
- * read as one design rather than a rainbow.
+ * The palette is deliberately quiet: two soft brand colours (a dusty blue and a sage green), neutral
+ * greys, and muted amber and rose for warnings and errors. Nothing is saturated enough to glow. Syntax
+ * colours are drawn from the same few hues, so code, prose and chrome read as one design.
  */
 
 export const THEME_NAMES = ["dark", "light", "mono"] as const;
@@ -17,10 +17,12 @@ export interface Theme {
   primary: string | undefined;
   /** The supporting colour: links, code, the model name. */
   secondary: string | undefined;
-  /** Neutral grey for hints, notices and line numbers. */
+  /** Neutral grey for hints, notices, line numbers and the rules around the input box. */
   muted: string | undefined;
-  /** Neutral for idle borders and rules. */
+  /** Neutral for idle borders and rules inside content. */
   border: string | undefined;
+  /** A slightly lifted background behind the input box, so it reads as a field. */
+  inputBackground: string | undefined;
   status: {
     success: string | undefined;
     warning: string | undefined;
@@ -37,24 +39,26 @@ export interface Theme {
 
 const dark: Theme = {
   name: "dark",
-  primary: "#3DDC97", // mint
-  secondary: "#5BC0EB", // sky
-  muted: "#7F8A9C",
-  border: "#3A4252",
-  status: { success: "#3DDC97", warning: "#E8B04A", error: "#F2677A" },
-  diff: { added: "#12362A", removed: "#3E1D26" },
-  syntax: { keyword: "#3DDC97", string: "#E8B04A", number: "#E8B04A", comment: "#76829A", title: "#5BC0EB", type: "#5BC0EB", builtin: "#3DDC97" },
+  primary: "#9DB7D5", // dusty blue
+  secondary: "#A8C3A0", // sage
+  muted: "#8B93A1",
+  border: "#4A5160",
+  inputBackground: "#171B21",
+  status: { success: "#A8C3A0", warning: "#D9B77E", error: "#D98A8F" },
+  diff: { added: "#1F2E26", removed: "#35252A" },
+  syntax: { keyword: "#9DB7D5", string: "#A8C3A0", number: "#D9B77E", comment: "#7C8798", title: "#B8CCE4", type: "#A8C3A0", builtin: "#D9B77E" },
 };
 
 const light: Theme = {
   name: "light",
-  primary: "#087F55",
-  secondary: "#0B74A6",
-  muted: "#5B6577",
+  primary: "#3F6E94",
+  secondary: "#4D7A4F",
+  muted: "#5C6370",
   border: "#C9CFDA",
-  status: { success: "#087F55", warning: "#946200", error: "#C0344D" },
-  diff: { added: "#D5F1E4", removed: "#F8D9DE" },
-  syntax: { keyword: "#087F55", string: "#946200", number: "#946200", comment: "#6B7587", title: "#0B74A6", type: "#0B74A6", builtin: "#087F55" },
+  inputBackground: "#F1F3F5",
+  status: { success: "#4D7A4F", warning: "#7B6637", error: "#B03A48" },
+  diff: { added: "#DDEBDD", removed: "#F3DDDF" },
+  syntax: { keyword: "#3F6E94", string: "#4D7A4F", number: "#7B6637", comment: "#6B7280", title: "#2F5F87", type: "#4D7A4F", builtin: "#7B6637" },
 };
 
 const mono: Theme = {
@@ -63,6 +67,7 @@ const mono: Theme = {
   secondary: undefined,
   muted: undefined,
   border: undefined,
+  inputBackground: undefined,
   status: { success: undefined, warning: undefined, error: undefined },
   diff: { added: undefined, removed: undefined },
   syntax: { keyword: undefined, string: undefined, number: undefined, comment: undefined, title: undefined, type: undefined, builtin: undefined },
