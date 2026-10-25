@@ -7,6 +7,7 @@ import { USAGE, parseArgs } from "./cli/args.js";
 import { bootstrap } from "./runtime/bootstrap.js";
 import { loadDotEnv } from "./cli/env.js";
 import { runOnce } from "./cli/run-once.js";
+import { readGitBranch } from "./cli/git-branch.js";
 import { readVersion } from "./cli/version.js";
 
 const args = parseArgs(process.argv.slice(2));
@@ -45,6 +46,7 @@ const app = render(
     cwd,
     providers,
     version: readVersion(),
+    readBranch: () => readGitBranch(cwd),
     initialTheme: preferences.theme,
     // A theme that can't be remembered is not worth interrupting the session for.
     onThemeChange: (theme) => void savePreferences({ theme }).catch(() => undefined),

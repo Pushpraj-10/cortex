@@ -29,6 +29,10 @@ export interface Chat {
   /** What the call awaiting approval will change, if its tool can say, for showing in the approval prompt. */
   pendingPreview: ToolPreview | undefined;
   expandedToolCallIds: ReadonlySet<string>;
+  /** How full the conversation is: estimated tokens about to be sent, and the size at which it gets compacted. Undefined before the first request. */
+  context: { used: number; budget: number } | undefined;
+  /** Characters of reply text streamed in during the current request, for a live token estimate. */
+  outputChars: number;
   /** Sends a message to the agent and appends everything it does to the timeline. */
   submit(text: string): Promise<void>;
   /** Aborts the in-flight request (and refuses any pending approval so the agent can unwind). */
@@ -53,6 +57,8 @@ export function useChat(session: AgentSession, permissions: PermissionBridge, cw
   const [isThinking, setIsThinking] = useState(false);
   const [pendingPermission, setPendingPermission] = useState<PermissionRequest | null>(null);
   const [expandedToolCallIds, setExpandedToolCallIds] = useState<Set<string>>(new Set());
+  const [context, setContext] = useState<{ used: number; budget: number } | undefined>(undefined);
+  const [outputChars, setOutputChars] = useState(0);
 
   const sessionRef = useRef(session);
   sessionRef.current = session;
@@ -65,6 +71,8 @@ export function useChat(session: AgentSession, permissions: PermissionBridge, cw
   const streamingIdRef = useRef<string | null>(null);
   const pendingDeltaRef = useRef("");
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Characters streamed in during this request; shown through `outputChars`, updated with each batch. */
+  const charsRef = useRef(0);
 
   /** Adds the batched text to the live message. */
   function flushDelta() {
@@ -72,6 +80,7 @@ export function useChat(session: AgentSession, permissions: PermissionBridge, cw
       clearTimeout(flushTimerRef.current);
       flushTimerRef.current = null;
     }
+    setOutputChars(charsRef.current);
     const id = streamingIdRef.current;
     const text = pendingDeltaRef.current;
     pendingDeltaRef.current = "";
@@ -138,6 +147,8 @@ export function useChat(session: AgentSession, permissions: PermissionBridge, cw
   async function submit(text: string) {
     append({ kind: "message", id: nextId("user"), role: "user", content: text });
     setIsThinking(true);
+    charsRef.current = 0;
+    setOutputChars(0);
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -147,14 +158,18 @@ export function useChat(session: AgentSession, permissions: PermissionBridge, cw
       for await (const event of sessionRef.current.chat(text, controller.signal)) {
         if (event.type === "messageDelta") {
           if (userCancelledRef.current) continue;
+          charsRef.current += event.delta.length;
           if (!streamingIdRef.current) {
             const id = nextId("assistant");
             streamingIdRef.current = id;
+            setOutputChars(charsRef.current);
             append({ kind: "message", id, role: "assistant", content: event.delta, streaming: true });
           } else {
             pendingDeltaRef.current += event.delta;
             if (!flushTimerRef.current) flushTimerRef.current = setTimeout(flushDelta, STREAM_FLUSH_MS);
           }
+        } else if (event.type === "context") {
+          setContext({ used: event.used, budget: event.budget });
         } else if (event.type === "toolCall") {
           endStreaming(); // the model's text always ends before a tool call; this only guards against a message event that never came
           // The loop waits at this event until the next one is asked for, so the file is still as it was when the preview is taken.
@@ -238,6 +253,8 @@ export function useChat(session: AgentSession, permissions: PermissionBridge, cw
     pendingPermission,
     pendingPreview: awaiting?.preview,
     expandedToolCallIds,
+    context,
+    outputChars,
     submit,
     cancel,
     answerPermission,
@@ -247,6 +264,9 @@ export function useChat(session: AgentSession, permissions: PermissionBridge, cw
       flushTimerRef.current = null;
       streamingIdRef.current = null;
       pendingDeltaRef.current = "";
+      charsRef.current = 0;
+      setOutputChars(0);
+      setContext(undefined);
       setTimeline([]);
       setExpandedToolCallIds(new Set());
     },

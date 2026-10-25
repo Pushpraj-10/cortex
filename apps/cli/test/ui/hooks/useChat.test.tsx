@@ -324,3 +324,80 @@ describe("useChat: streaming text", () => {
     unmount();
   });
 });
+
+describe("useChat: live status", () => {
+  it("has no context size until the agent reports one, then follows the latest report", async () => {
+    const { chat, unmount } = mount(async function* () {
+      yield { type: "context", used: 1200, budget: 100_000 };
+      yield { type: "toolCall", toolName: "read_file", args: { path: "f.txt" } };
+      yield { type: "toolResult", toolName: "read_file", output: {}, ok: true };
+      yield { type: "context", used: 5600, budget: 100_000 };
+      yield { type: "message", content: "done" };
+    });
+    expect(chat().context).toBeUndefined();
+
+    await chat().submit("x");
+    await settle();
+
+    expect(chat().context).toEqual({ used: 5600, budget: 100_000 });
+    unmount();
+  });
+
+  it("counts the characters of reply text that streamed in, and starts again with each request", async () => {
+    let round = 0;
+    const { chat, unmount } = mount(async function* () {
+      round += 1;
+      if (round === 1) {
+        yield { type: "messageDelta", delta: "ab" };
+        yield { type: "messageDelta", delta: "cde" };
+        yield { type: "message", content: "abcde" };
+      } else {
+        yield { type: "messageDelta", delta: "z" };
+        yield { type: "message", content: "z" };
+      }
+    });
+    expect(chat().outputChars).toBe(0);
+
+    await chat().submit("one");
+    await settle();
+    expect(chat().outputChars).toBe(5);
+
+    await chat().submit("two");
+    await settle();
+    expect(chat().outputChars).toBe(1);
+    unmount();
+  });
+
+  it("adds up the text of every turn in one request, narration before tool calls included", async () => {
+    const { chat, unmount } = mount(async function* () {
+      yield { type: "messageDelta", delta: "Let me look." };
+      yield { type: "message", content: "Let me look." };
+      yield { type: "toolCall", toolName: "read_file", args: { path: "f.txt" } };
+      yield { type: "toolResult", toolName: "read_file", output: {}, ok: true };
+      yield { type: "messageDelta", delta: "Done." };
+      yield { type: "message", content: "Done." };
+    });
+    await chat().submit("x");
+    await settle();
+    expect(chat().outputChars).toBe("Let me look.".length + "Done.".length);
+    unmount();
+  });
+
+  it("forgets the context size and the count when the transcript is cleared", async () => {
+    const { chat, unmount } = mount(async function* () {
+      yield { type: "context", used: 10, budget: 100 };
+      yield { type: "messageDelta", delta: "hi" };
+      yield { type: "message", content: "hi" };
+    });
+    await chat().submit("x");
+    await settle();
+    expect(chat().context).toBeDefined();
+    expect(chat().outputChars).toBe(2);
+
+    chat().reset();
+    await settle();
+    expect(chat().context).toBeUndefined();
+    expect(chat().outputChars).toBe(0);
+    unmount();
+  });
+});

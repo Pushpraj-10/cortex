@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { homedir } from "node:os";
 import { Box, useApp, useInput } from "ink";
 import type { AgentPolicy, AgentSession } from "@cortex/agent";
 import { PERMISSION_MODES, type PermissionMode } from "@cortex/policy";
@@ -19,6 +20,8 @@ import { useAltScreen, useTerminalSize } from "./hooks/terminal.js";
 import { slashMenuRows, transcriptRows } from "./layout.js";
 import type { PermissionBridge } from "../runtime/permission-bridge.js";
 import type { ProviderManager } from "../provider/manager.js";
+import { tildify } from "../format/path.js";
+import { useGitBranch } from "./hooks/useGitBranch.js";
 import { pickPlaceholder } from "./theme/copy.js";
 import { ThemeContext } from "./theme/ThemeContext.js";
 import { getTheme, resolveThemeName, type ThemeName } from "./theme/themes.js";
@@ -40,9 +43,13 @@ export interface AppProps {
   initialTheme?: string;
   /** Called when /theme picks a theme, so the choice can be remembered. */
   onThemeChange?(theme: ThemeName): void;
+  /** Finds the current git branch for the footer; called at startup and after each turn. Omit to show none. */
+  readBranch?(): string | undefined;
 }
 
-export function App({ initialSession, newSession, policy, permissions, cwd, providers, version, initialTheme, onThemeChange }: AppProps) {
+const noBranch = () => undefined;
+
+export function App({ initialSession, newSession, policy, permissions, cwd, providers, version, initialTheme, onThemeChange, readBranch = noBranch }: AppProps) {
   useAltScreen();
   const [themeName, setThemeName] = useState<ThemeName>(() => resolveThemeName(initialTheme, {}));
   const theme = getTheme(resolveThemeName(themeName));
@@ -52,6 +59,8 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
   const [session, setSession] = useState(initialSession);
   const chat = useChat(session, permissions, cwd);
   const placeholder = useMemo(() => pickPlaceholder(), []);
+  const branch = useGitBranch(readBranch, chat.isThinking);
+  const shownCwd = useMemo(() => tildify(cwd, homedir()), [cwd]);
   const input = useTextInput();
   const [mode, setModeState] = useState<PermissionMode>(policy.mode);
   const [submitted, setSubmitted] = useState<string[]>([]);
@@ -255,7 +264,7 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
     <ThemeContext.Provider value={theme}>
       <Box flexDirection="column" height={rows}>
         <MessageList cwd={cwd} version={version} height={listHeight} timeline={chat.timeline} expandedToolCallIds={chat.expandedToolCallIds} />
-        {showThinking && <ThinkingIndicator active />}
+        {showThinking && <ThinkingIndicator active outputChars={chat.outputChars} />}
         {request && (
           <PermissionPrompt
             summary={summarizeToolCall(request.toolName, request.args)}
@@ -268,7 +277,7 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
         {setup.prompt && <SetupPrompt title={setup.prompt.title} label={setup.prompt.label} hint={setup.prompt.hint} error={setup.prompt.error} />}
         {slashMenuOpen && <SlashCommandMenu commands={filteredCommands} selectedIndex={clampedSlashIndex} />}
         <InputBox value={input.value} cursorOffset={input.cursorOffset} mask={setup.prompt?.secret === true} placeholder={placeholder} />
-        <StatusLine model={active ? `${active.model} (${active.provider})` : "no provider"} mode={mode} cwd={cwd} />
+        <StatusLine model={active ? `${active.model} (${active.provider})` : "no provider"} mode={mode} cwd={shownCwd} branch={branch} context={chat.context} />
       </Box>
     </ThemeContext.Provider>
   );

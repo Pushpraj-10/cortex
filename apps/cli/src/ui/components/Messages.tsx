@@ -10,8 +10,9 @@ import { Banner } from "./Banner.js";
 
 // ---- Message ---------------------------------------------------------------------
 
-/** Columns taken by the left margin of an assistant message. */
+/** Columns taken by the left margin of an assistant message, which is also the gutter an icon sits in (the tool-call glyphs use the same two columns). */
 const ASSISTANT_INDENT = 2;
+const GUTTER = ASSISTANT_INDENT;
 
 export function MessageBubble({ message }: { message: MessageEntry }) {
   const theme = useTheme();
@@ -27,8 +28,15 @@ export function MessageBubble({ message }: { message: MessageEntry }) {
 
   if (message.isError) {
     return (
-      <Box marginBottom={1} marginLeft={2}>
-        <Text color={theme.status.error}>{message.content}</Text>
+      <Box marginBottom={1}>
+        <Box width={GUTTER} flexShrink={0}>
+          <Text color={theme.status.error}>✗</Text>
+        </Box>
+        <Box flexGrow={1}>
+          <Text color={theme.status.error} wrap="wrap">
+            {message.content}
+          </Text>
+        </Box>
       </Box>
     );
   }
@@ -42,11 +50,18 @@ export function MessageBubble({ message }: { message: MessageEntry }) {
 
 // ---- Notice ----------------------------------------------------------------------
 
-function NoticeLine({ notice }: { notice: NoticeEntry }) {
+export function NoticeLine({ notice }: { notice: NoticeEntry }) {
   const theme = useTheme();
   return (
-    <Box marginBottom={1} marginLeft={2}>
-      <Text color={theme.muted}>{notice.text}</Text>
+    <Box marginBottom={1}>
+      <Box width={GUTTER} flexShrink={0}>
+        <Text color={theme.muted}>·</Text>
+      </Box>
+      <Box flexGrow={1}>
+        <Text color={theme.muted} wrap="wrap">
+          {notice.text}
+        </Text>
+      </Box>
     </Box>
   );
 }
