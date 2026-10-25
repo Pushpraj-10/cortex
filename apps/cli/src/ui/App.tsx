@@ -6,7 +6,7 @@ import { PERMISSION_MODES, type PermissionMode } from "@cortex/policy";
 import { runSlashCommand, slashCommands, type CommandHost } from "./commands.js";
 import { InputBox } from "./components/InputBox.js";
 import { MessageList } from "./components/Messages.js";
-import { PERMISSION_PROMPT_ROWS, PermissionPrompt, SETUP_PROMPT_ROWS, SetupPrompt } from "./components/Prompts.js";
+import { PermissionPrompt, SETUP_PROMPT_ROWS, SetupPrompt, permissionPromptRows } from "./components/Prompts.js";
 import { SlashCommandMenu } from "./components/SlashCommandMenu.js";
 import { StatusLine } from "./components/StatusLine.js";
 import { ThinkingIndicator } from "./components/ThinkingIndicator.js";
@@ -46,10 +46,10 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
   const [themeName, setThemeName] = useState<ThemeName>(() => resolveThemeName(initialTheme, {}));
   const theme = getTheme(resolveThemeName(themeName));
   const { exit } = useApp();
-  const { rows } = useTerminalSize();
+  const { rows, columns } = useTerminalSize();
 
   const [session, setSession] = useState(initialSession);
-  const chat = useChat(session, permissions);
+  const chat = useChat(session, permissions, cwd);
   const input = useTextInput();
   const [mode, setModeState] = useState<PermissionMode>(policy.mode);
   const [submitted, setSubmitted] = useState<string[]>([]);
@@ -231,6 +231,8 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
   );
 
   const request = chat.pendingPermission;
+  // How much of a diff the approval prompt may show: up to 12 lines, fewer on a short terminal so the transcript keeps its rows.
+  const maxPreviewLines = Math.max(3, Math.min(12, rows - 18));
   const showThinking = chat.isThinking && !request;
   const pickerOpen = setup.stage === "select";
   const listHeight = transcriptRows({
@@ -238,7 +240,7 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
     inputValue: input.value,
     thinking: showThinking,
     slashMenuRows: slashMenuRows(slashMenuOpen || pickerOpen, pickerOpen ? setup.menu.length : filteredCommands.length),
-    promptRows: request ? PERMISSION_PROMPT_ROWS : setup.prompt ? SETUP_PROMPT_ROWS : 0,
+    promptRows: request ? permissionPromptRows(chat.pendingPreview, maxPreviewLines) : setup.prompt ? SETUP_PROMPT_ROWS : 0,
   });
 
   return (
@@ -246,7 +248,14 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
       <Box flexDirection="column" height={rows}>
         <MessageList cwd={cwd} version={version} height={listHeight} timeline={chat.timeline} expandedToolCallIds={chat.expandedToolCallIds} />
         {showThinking && <ThinkingIndicator active />}
-        {request && <PermissionPrompt summary={summarizeToolCall(request.toolName, request.args)} />}
+        {request && (
+          <PermissionPrompt
+            summary={summarizeToolCall(request.toolName, request.args)}
+            preview={chat.pendingPreview}
+            width={columns}
+            maxPreviewLines={maxPreviewLines}
+          />
+        )}
         {pickerOpen && <SlashCommandMenu commands={setup.menu} selectedIndex={setup.selectedIndex} prefix="" />}
         {setup.prompt && <SetupPrompt title={setup.prompt.title} label={setup.prompt.label} hint={setup.prompt.hint} error={setup.prompt.error} />}
         {slashMenuOpen && <SlashCommandMenu commands={filteredCommands} selectedIndex={clampedSlashIndex} />}

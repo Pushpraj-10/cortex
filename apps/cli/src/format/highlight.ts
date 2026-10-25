@@ -45,6 +45,26 @@ const SCOPES: Record<string, SyntaxScope> = {
   quote: "comment",
 };
 
+const LANGUAGE_BY_EXTENSION: Record<string, string> = {
+  ts: "typescript", tsx: "typescript", mts: "typescript", cts: "typescript",
+  js: "javascript", jsx: "javascript", mjs: "javascript", cjs: "javascript",
+  json: "json", md: "markdown", markdown: "markdown",
+  py: "python", go: "go", rs: "rust", java: "java", kt: "kotlin", swift: "swift", rb: "ruby", php: "php", cs: "csharp", lua: "lua", r: "r",
+  c: "c", h: "c", cpp: "cpp", cc: "cpp", hpp: "cpp",
+  sh: "bash", bash: "bash", zsh: "bash",
+  yml: "yaml", yaml: "yaml", toml: "ini", ini: "ini",
+  css: "css", scss: "scss", html: "xml", htm: "xml", xml: "xml", svg: "xml",
+  sql: "sql",
+};
+
+/** The highlighter's language for a file path, by its extension; "" when it is not one we know (shown as plain text). */
+export function languageOf(filePath: string): string {
+  const name = (filePath.split(/[\\/]/).pop() ?? "").toLowerCase();
+  if (name === "makefile") return "makefile";
+  const dot = name.lastIndexOf(".");
+  return dot === -1 ? "" : (LANGUAGE_BY_EXTENSION[name.slice(dot + 1)] ?? "");
+}
+
 interface HastNode {
   type: string;
   value?: string;

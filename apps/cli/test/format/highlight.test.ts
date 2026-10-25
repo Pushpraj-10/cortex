@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { highlightLines, type Run } from "../../src/format/highlight.js";
+import { highlightLines, languageOf, type Run } from "../../src/format/highlight.js";
 
 const text = (lines: Run[][]) => lines.map((runs) => runs.map((run) => run.text).join("")).join("\n");
 const scopesOf = (lines: Run[][]) => new Set(lines.flat().flatMap((run) => (run.scope ? [run.scope] : [])));
@@ -53,5 +53,46 @@ describe("highlightLines", () => {
     const lines = highlightLines(big, "ts");
     expect(scopesOf(lines).size).toBe(0);
     expect(text(lines)).toBe(big.replace(/\n$/, "\n"));
+  });
+});
+
+describe("languageOf", () => {
+  it("maps common extensions to a highlighter language", () => {
+    expect(languageOf("src/app.ts")).toBe("typescript");
+    expect(languageOf("src/App.tsx")).toBe("typescript");
+    expect(languageOf("a/b/c.mjs")).toBe("javascript");
+    expect(languageOf("data.json")).toBe("json");
+    expect(languageOf("README.md")).toBe("markdown");
+    expect(languageOf("run.sh")).toBe("bash");
+    expect(languageOf("index.html")).toBe("xml");
+    expect(languageOf("main.py")).toBe("python");
+  });
+
+  it("is case-insensitive and handles Windows paths", () => {
+    expect(languageOf("SRC\\APP.TS")).toBe("typescript");
+    expect(languageOf("C:\\proj\\src\\main.py")).toBe("python");
+  });
+
+  it("knows a Makefile by name and is empty for unknown or missing extensions", () => {
+    expect(languageOf("Makefile")).toBe("makefile");
+    expect(languageOf("notes.xyz")).toBe("");
+    expect(languageOf("LICENSE")).toBe("");
+    expect(languageOf("")).toBe("");
+  });
+
+  it.each([
+    ["a.ts", "const a = 1;"],
+    ["a.js", "const a = 1;"],
+    ["a.py", "def f():\n    return 1"],
+    ["a.go", "func main() {}"],
+    ["a.rs", "fn main() {}"],
+    ["a.java", "public class A {}"],
+    ["a.sh", 'echo "x"'],
+    ["a.sql", "SELECT 1 FROM t"],
+    ["a.css", "a { color: red; }"],
+    ["a.json", '{"a": 1}'],
+  ])("maps %s to a language the highlighter really has (it colours real code)", (file, code) => {
+    // A name the highlighter does not know would silently give plain text, with no scopes at all.
+    expect(scopesOf(highlightLines(code, languageOf(file))).size).toBeGreaterThan(0);
   });
 });

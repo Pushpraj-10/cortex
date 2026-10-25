@@ -2,9 +2,10 @@
 import React from "react";
 import { Box, Text } from "ink";
 import { useTheme } from "../theme/ThemeContext.js";
-import type { MessageEntry, NoticeEntry, TimelineEntry, ToolCallEntry } from "../types.js";
+import type { MessageEntry, NoticeEntry, TimelineEntry } from "../types.js";
 import { useTerminalSize } from "../hooks/terminal.js";
 import { Markdown } from "../markdown/Markdown.js";
+import { ToolCall } from "../toolcalls/ToolCall.js";
 import { Banner } from "./Banner.js";
 
 // ---- Message ---------------------------------------------------------------------
@@ -39,29 +40,6 @@ export function MessageBubble({ message }: { message: MessageEntry }) {
   );
 }
 
-// ---- Tool call -------------------------------------------------------------------
-
-/**
- * Collapsed by default: one line with a bullet icon and summary. Expanded shows an indented detail
- * block. `expanded` is controlled by the parent (Ctrl+T) rather than owned here, since which blocks
- * are open is conversation-level state, not per-component state.
- */
-export function ToolCallBlock({ data, expanded }: { data: ToolCallEntry; expanded: boolean }) {
-  const theme = useTheme();
-  return (
-    <Box flexDirection="column" marginBottom={1}>
-      <Text>
-        <Text color={theme.primary}>{expanded ? "⏺" : "●"}</Text> {data.summary}
-      </Text>
-      {expanded && (
-        <Box marginLeft={2} borderStyle="round" borderColor={theme.border} paddingX={1}>
-          <Text color={theme.muted}>{data.detail}</Text>
-        </Box>
-      )}
-    </Box>
-  );
-}
-
 // ---- Notice ----------------------------------------------------------------------
 
 function NoticeLine({ notice }: { notice: NoticeEntry }) {
@@ -90,6 +68,7 @@ interface MessageListProps {
  * entirely by Yoga's flex layout, no manual line-counting needed.
  */
 export function MessageList({ cwd, version, height, timeline, expandedToolCallIds }: MessageListProps) {
+  const { columns } = useTerminalSize();
   return (
     <Box height={height} overflow="hidden" flexDirection="column" justifyContent="flex-end">
       <Box flexDirection="column">
@@ -97,7 +76,7 @@ export function MessageList({ cwd, version, height, timeline, expandedToolCallId
         {timeline.map((entry) => {
           if (entry.kind === "message") return <MessageBubble key={entry.id} message={entry} />;
           if (entry.kind === "notice") return <NoticeLine key={entry.id} notice={entry} />;
-          return <ToolCallBlock key={entry.id} data={entry} expanded={expandedToolCallIds.has(entry.id)} />;
+          return <ToolCall key={entry.id} entry={entry} expanded={expandedToolCallIds.has(entry.id)} width={columns} />;
         })}
       </Box>
     </Box>

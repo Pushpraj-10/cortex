@@ -16,6 +16,7 @@ for await (const event of session.chat("fix the parser", signal)) { /* message |
 2. The history is compacted if it has outgrown `contextBudgetTokens`: older turns are replaced by a model-written summary, keeping the system message and the recent turns (`compacted` event).
 3. The model replies. Plain text ends the turn. A tool call is run — **one per turn**, so the model sees each real result before choosing the next action.
 4. The executor runs it through the policy pipeline: `PreToolUse` hooks → permission decision (asking the user if needed) → the tool → `PostToolUse` hooks. A refusal or failure comes back as an error result whose message says what happened and what to do instead (recovery hints for missing paths, edit misses, and so on), so the model adapts instead of retrying blindly. An unknown tool is an error result listing the available tools, never a crash.
+   The `toolResult` event carries `ok`, and `refused: true` when the call was stopped by a decision (the user declined, policy denied it, a hook blocked it) rather than failing, so a UI can tell "no" from "broke" without reading the message.
 5. The result goes back into the history (oversized results are truncated) and the loop repeats, up to `maxIterations` (default 16). `Stop` hooks run at the end.
 
 The context block is appended to each request as a trailing user message but never stored in the history, so stale copies do not pile up.

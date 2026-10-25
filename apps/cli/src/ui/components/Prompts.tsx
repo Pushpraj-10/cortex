@@ -1,22 +1,59 @@
 import React from "react";
 import { Box, Text } from "ink";
+import type { ToolPreview } from "@cortex/tools";
 import { useTheme } from "../theme/ThemeContext.js";
+import { Preview } from "../toolcalls/Preview.js";
+import { changeStats, previewRows } from "../toolcalls/preview-model.js";
 
-// The two prompts that take over the area above the input box. Each is two lines of text plus a border,
-// and exports its row count so the layout can reserve exactly that much.
+// The two prompts that take over the area above the input box. Each is a fixed number of rows, which the
+// layout reserves exactly, so every line in them is pinned to one row.
 
 // ---- PermissionPrompt ----
 
-export const PERMISSION_PROMPT_ROWS = 4;
+/** The border, the question and the key hint: what the prompt takes before any preview. */
+const PERMISSION_PROMPT_BASE_ROWS = 4;
+/** Columns the border and its padding take away from the preview. */
+const PERMISSION_PROMPT_FRAME_COLUMNS = 4;
 
-/** Shown while the agent waits for approval of a tool call. The keys are handled by App. */
-export function PermissionPrompt({ summary }: { summary: string }) {
+/** Rows the approval prompt takes with `preview` shown at most `maxPreviewLines` tall. */
+export function permissionPromptRows(preview: ToolPreview | undefined, maxPreviewLines: number): number {
+  return PERMISSION_PROMPT_BASE_ROWS + previewRows(preview, maxPreviewLines);
+}
+
+interface PermissionPromptProps {
+  summary: string;
+  /** What the call will change, if its tool can say: shown so the answer is an informed one. */
+  preview?: ToolPreview;
+  /** Columns available to the whole prompt. */
+  width: number;
+  maxPreviewLines: number;
+}
+
+/** Shown while the agent waits for approval of a tool call: what it is, what it will change, and the keys. The keys are handled by App. */
+export function PermissionPrompt({ summary, preview, width, maxPreviewLines }: PermissionPromptProps) {
   const theme = useTheme();
+  const stats = changeStats(preview);
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={theme.primary} paddingX={1}>
-      <Text>
-        Allow <Text bold>{summary}</Text>?
+      <Text wrap="truncate-end">
+        Allow <Text bold>{summary}</Text>
+        {stats && (
+          <Text color={theme.muted}>
+            {" ("}
+            {stats.isNew ? "new, " : ""}
+            <Text color={theme.status.success}>+{stats.added}</Text>
+            {stats.removed > 0 && (
+              <>
+                {" "}
+                <Text color={theme.status.error}>-{stats.removed}</Text>
+              </>
+            )}
+            {")"}
+          </Text>
+        )}
+        ?
       </Text>
+      {preview && <Preview preview={preview} width={Math.max(10, width - PERMISSION_PROMPT_FRAME_COLUMNS)} maxLines={maxPreviewLines} truncate />}
       <Text color={theme.muted}>y / enter allow · n / esc deny</Text>
     </Box>
   );
