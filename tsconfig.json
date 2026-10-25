@@ -6,6 +6,8 @@
     { "path": "packages/providers" },
     { "path": "packages/tools" },
     { "path": "packages/policy" },
+    { "path": "packages/extensions" },
+    { "path": "packages/config" },
     { "path": "packages/context" },
     { "path": "packages/agent" }
   ]
