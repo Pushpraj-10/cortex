@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ok, err, CortexError, type Result } from "@cortex/core";
 import type { ChatMessage, LLMProvider, StreamEvent } from "@cortex/providers";
+import { estimateTokens } from "../src/compaction.js";
 import { LLM_ERROR_PREFIX, runToolLoop } from "../src/loop.js";
 import type { Executor } from "../src/types.js";
 
@@ -10,10 +11,16 @@ function llmReturning(...responses: Result<ChatMessage>[]): LLMProvider {
   return { chat };
 }
 
-async function collect<T>(gen: AsyncGenerator<T, void, void>): Promise<T[]> {
+/** Every event, in order. */
+async function collectAll<T>(gen: AsyncGenerator<T, void, void>): Promise<T[]> {
   const events: T[] = [];
   for await (const event of gen) events.push(event);
   return events;
+}
+
+/** Every event except the `context` size reports, which most tests are not about (they have their own tests, below). */
+async function collect<T>(gen: AsyncGenerator<T, void, void>): Promise<T[]> {
+  return (await collectAll(gen)).filter((event) => (event as { type?: string }).type !== "context");
 }
 
 describe("runToolLoop", () => {
@@ -372,5 +379,54 @@ describe("runToolLoop with a provider that does not stream", () => {
     const llm = llmReturning(ok({ role: "assistant", content: "  ", toolCalls: [{ toolName: "t", args: {} }] }), ok({ role: "assistant", content: "Done" }));
     const events = await collect(runToolLoop([{ role: "user", content: "x" }], { llm, executor: { execute: vi.fn().mockResolvedValue(ok(1)) }, tools: [] }));
     expect(events[0]).toMatchObject({ type: "toolCall" });
+  });
+});
+
+describe("runToolLoop: context size reports", () => {
+  const contexts = (events: { type: string }[]) => events.filter((event): event is { type: "context"; used: number; budget: number } => event.type === "context");
+
+  it("reports the size of what is about to be sent before every model request", async () => {
+    const llm = llmReturning(
+      ok({ role: "assistant", content: "", toolCalls: [{ toolName: "t", args: {} }] }),
+      ok({ role: "assistant", content: "done" }),
+    );
+    const executor: Executor = { execute: vi.fn().mockResolvedValue(ok("result")) };
+
+    const events = await collectAll(runToolLoop([{ role: "user", content: "go" }], { llm, executor, tools: [] }));
+
+    expect(events.map((event) => event.type)).toEqual(["context", "toolCall", "toolResult", "context", "message"]);
+  });
+
+  it("measures the history with the same estimate compaction uses, and grows as the conversation does", async () => {
+    const history: ChatMessage[] = [{ role: "user", content: "x".repeat(400) }];
+    const before = estimateTokens(history);
+    const llm = llmReturning(
+      ok({ role: "assistant", content: "", toolCalls: [{ toolName: "t", args: {} }] }),
+      ok({ role: "assistant", content: "done" }),
+    );
+    const executor: Executor = { execute: vi.fn().mockResolvedValue(ok("y".repeat(2000))) };
+
+    const [first, second] = contexts(await collectAll(runToolLoop(history, { llm, executor, tools: [] })));
+
+    expect(first!.used).toBe(before);
+    expect(second!.used).toBeGreaterThan(first!.used + 400);
+  });
+
+  it("counts the context block that is sent with each request but never stored", async () => {
+    const run = async (contextBlock?: string) => {
+      const llm = llmReturning(ok({ role: "assistant", content: "done" }));
+      const events = await collectAll(runToolLoop([{ role: "user", content: "hi" }], { llm, executor: { execute: vi.fn() }, tools: [], contextBlock }));
+      return contexts(events)[0]!.used;
+    };
+    expect(await run("c".repeat(4000))).toBeGreaterThan((await run()) + 900);
+  });
+
+  it("reports the budget at which the history is compacted: 100,000 unless the caller set one", async () => {
+    const budgetOf = async (contextBudgetTokens?: number) => {
+      const llm = llmReturning(ok({ role: "assistant", content: "done" }));
+      return contexts(await collectAll(runToolLoop([{ role: "user", content: "hi" }], { llm, executor: { execute: vi.fn() }, tools: [], contextBudgetTokens })))[0]!.budget;
+    };
+    expect(await budgetOf()).toBe(100_000);
+    expect(await budgetOf(5000)).toBe(5000);
   });
 });

@@ -157,6 +157,8 @@ function logEvent(n: number, event: AgentEvent) {
     log(`EVENT ${n} [compacted]`, { before: event.before, after: event.after });
   } else if (event.type === "messageDelta") {
     // shown whole in the message event that follows
+  } else if (event.type === "context") {
+    // a size report, not something to log
   } else {
     log(`EVENT ${n} [message]`, event.content);
   }

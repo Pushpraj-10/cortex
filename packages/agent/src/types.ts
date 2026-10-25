@@ -24,6 +24,8 @@ export type AgentEvent =
    * denied it, or a hook blocked it) rather than the tool failing. `output` is what the model is told.
    */
   | { type: "toolResult"; toolName: string; output: unknown; ok: boolean; refused?: true }
+  /** Before each model request: how big the conversation about to be sent is, and the size at which it gets compacted (both estimated tokens). */
+  | { type: "context"; used: number; budget: number }
   /** Older history was replaced by a summary to stay inside the context budget (sizes are estimated tokens). */
   | { type: "compacted"; before: number; after: number };
 

@@ -24,9 +24,10 @@ function llmReturning(...responses: Result<ChatMessage>[]): { llm: LLMProvider; 
   return { llm: { chat }, sentMessages };
 }
 
+/** Every event except the `context` size reports, which these tests are not about. */
 async function collect<T>(gen: AsyncGenerator<T, void, void>): Promise<T[]> {
   const events: T[] = [];
-  for await (const event of gen) events.push(event);
+  for await (const event of gen) if ((event as { type?: string }).type !== "context") events.push(event);
   return events;
 }
 

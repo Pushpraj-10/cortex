@@ -1,6 +1,6 @@
 import { CortexError, err, ok, type Result } from "@cortex/core";
 import type { ChatMessage, ChatRequest, LLMProvider, ToolSpec } from "@cortex/providers";
-import { compactHistory } from "./compaction.js";
+import { compactHistory, estimateTokens } from "./compaction.js";
 import { REFUSAL_CODES, type AgentEvent, type Executor } from "./types.js";
 
 // 8 proved too tight in real sessions: a find → read → edit → verify task can spend
@@ -87,6 +87,7 @@ export async function* runToolLoop(
     const requestMessages = deps.contextBlock
       ? [...history, { role: "user" as const, content: deps.contextBlock }]
       : history;
+    yield { type: "context", used: estimateTokens(requestMessages), budget: deps.contextBudgetTokens ?? DEFAULT_CONTEXT_BUDGET_TOKENS };
     const { result, streamed } = yield* ask(deps.llm, { messages: requestMessages, tools: deps.tools, signal });
 
     if (!result.ok) {
