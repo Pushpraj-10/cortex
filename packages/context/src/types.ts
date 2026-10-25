@@ -12,4 +12,10 @@ export interface ContextFragment {
   /** Rendered as a heading in the assembled block. */
   title: string;
   content: string;
+  /**
+   * How relevant this fragment is to the current request, 0..1 (default 0). Fragments
+   * render highest first, and the lowest are the first to be dropped when the block
+   * exceeds its size budget.
+   */
+  relevance?: number;
 }

@@ -2,8 +2,8 @@ import { promises as fs } from "node:fs";
 import { ok, err, resolveWorkspacePath, type Result } from "@cortex/shared";
 import { WorkspaceOverviewProviderError } from "./errors.js";
 import type { WorkspaceOverviewData } from "./format-overview.js";
+import { IGNORED_NAMES } from "../../workspace/ignored-names.js";
 
-const DENYLIST = new Set(["node_modules", ".git", "dist"]);
 const README_EXCERPT_MAX_LENGTH = 500;
 
 /**
@@ -18,7 +18,7 @@ export async function readWorkspaceOverview(workspaceRoot: string): Promise<Resu
   try {
     const dirEntries = await fs.readdir(resolveWorkspacePath(workspaceRoot, "."), { withFileTypes: true });
     entries = dirEntries
-      .filter((entry) => !DENYLIST.has(entry.name))
+      .filter((entry) => !IGNORED_NAMES.has(entry.name))
       .map((entry) => ({ name: entry.name, type: entry.isDirectory() ? ("directory" as const) : ("file" as const) }));
   } catch (error) {
     return err(new WorkspaceOverviewProviderError(`Failed to read workspace directory at ${workspaceRoot}`, error));

@@ -11,6 +11,15 @@ export const workspaceOverviewProvider: ContextProvider = {
     const result = await readWorkspaceOverview(request.workspaceRoot);
     if (!result.ok) return result;
 
-    return ok([{ providerId: "workspace-overview", title: "Workspace Overview", content: formatOverview(result.value) }]);
+    // Low relevance: general background that always applies, so it ranks below anything the
+    // request specifically asked for and is the first thing dropped when the block runs long.
+    return ok([
+      {
+        providerId: "workspace-overview",
+        title: "Workspace Overview",
+        content: formatOverview(result.value),
+        relevance: 0.1,
+      },
+    ]);
   },
 };
