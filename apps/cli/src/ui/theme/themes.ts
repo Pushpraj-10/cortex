@@ -40,22 +40,25 @@ export interface Theme {
 
 const dark: Theme = {
   name: "dark",
-  text: { primary: undefined, secondary: "#6B7280", accent: "#D4A05F", link: "#7DB3E8" },
-  status: { success: "#8CC084", warning: "#E5C07B", error: "#F87171" },
-  diff: { added: "#1F3A2A", removed: "#4A2327" },
-  border: { default: "#4B5563", focus: "#D4A05F" },
-  syntax: { keyword: "#C678DD", string: "#98C379", number: "#D19A66", comment: "#7F848E", title: "#61AFEF", type: "#E5C07B", builtin: "#56B6C2" },
-  gradient: ["#F4C97B", "#D4A05F", "#C8664F"],
+  text: { primary: undefined, secondary: "#8B93A7", accent: "#749BFF", link: "#6CB6FF" },
+  status: { success: "#00B95C", warning: "#FBBC04", error: "#FC413D" },
+  diff: { added: "#0F3D26", removed: "#4A1C1D" },
+  border: { default: "#3B4256", focus: "#749BFF" },
+  syntax: { keyword: "#B794F6", string: "#5FD38D", number: "#F5C451", comment: "#6B7385", title: "#6CA7FF", type: "#4DD0C8", builtin: "#FF9F6B" },
+  // The colours of Google Antigravity's icon, ordered so each neighbouring pair blends cleanly:
+  // yellow to green to blue, then through purple to red.
+  gradient: ["#FFE432", "#00B95C", "#3186FF", "#FC413D"],
 };
 
 const light: Theme = {
   name: "light",
-  text: { primary: undefined, secondary: "#6B7280", accent: "#9A5B13", link: "#1D5FA8" },
-  status: { success: "#2E7D32", warning: "#9A6700", error: "#C62828" },
-  diff: { added: "#D5F0DC", removed: "#F9D7D7" },
-  border: { default: "#9CA3AF", focus: "#9A5B13" },
-  syntax: { keyword: "#8250DF", string: "#116329", number: "#953800", comment: "#6E7781", title: "#0550AE", type: "#7D4E00", builtin: "#0A6E6E" },
-  gradient: ["#B9741C", "#9A5B13", "#8F3F2B"],
+  text: { primary: undefined, secondary: "#5F6778", accent: "#1A5FD1", link: "#0B5CAD" },
+  status: { success: "#0B8A4B", warning: "#9A6A00", error: "#C5221F" },
+  diff: { added: "#D3F0DF", removed: "#FAD7D5" },
+  border: { default: "#B6BCCB", focus: "#1A5FD1" },
+  syntax: { keyword: "#7A3FD0", string: "#0B7A43", number: "#A15C00", comment: "#6A7283", title: "#1257B8", type: "#0A7C74", builtin: "#B4531A" },
+  // The same four colours, deepened so they stay readable on a light background.
+  gradient: ["#D9A600", "#00873F", "#1F6BE0", "#D93025"],
 };
 
 const mono: Theme = {
