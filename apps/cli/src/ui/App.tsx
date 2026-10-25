@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { homedir } from "node:os";
-import { Box, useApp, useInput } from "ink";
+import { Box, useApp, useInput, useStdin } from "ink";
 import type { AgentPolicy, AgentSession } from "@cortex/agent";
 import { PERMISSION_MODES, type PermissionMode } from "@cortex/policy";
 
 import { HELP_TEXT, runSlashCommand, slashCommands, type CommandHost } from "./commands.js";
+import { HistorySearchLine } from "./components/HistorySearchLine.js";
 import { InputBox } from "./components/InputBox.js";
 import { MessageList } from "./components/Messages.js";
 import { PermissionPrompt, SETUP_PROMPT_ROWS, SetupPrompt, permissionPromptRows } from "./components/Prompts.js";
@@ -13,13 +14,13 @@ import { StatusLine } from "./components/StatusLine.js";
 import { ThinkingIndicator } from "./components/ThinkingIndicator.js";
 import { summarizeToolCall } from "../format/tool-calls.js";
 import { useChat } from "./hooks/useChat.js";
-import { useInputHistory } from "./hooks/useInputHistory.js";
+import { historyMatches, stepHistorySearch, useInputHistory, type HistorySearch } from "./hooks/useInputHistory.js";
 import { useProviderSetup } from "./hooks/useProviderSetup.js";
 import { activeMention, completeMention, rankFiles } from "../format/file-mentions.js";
 import { editFor, mentionMenuAction, useHomeEnd, type EdgeKey } from "./hooks/keys.js";
 import { useWorkspaceFiles } from "./hooks/useWorkspaceFiles.js";
 import { continueLine, moveToLineEnd, moveToLineStart, moveVertical, normalizePaste, useTextInput } from "./hooks/useTextInput.js";
-import { useAltScreen, useTerminalSize } from "./hooks/terminal.js";
+import { TerminalSizeContext, useAltScreen, useTerminalSize } from "./hooks/terminal.js";
 import { slashMenuRows, transcriptRows } from "./layout.js";
 import type { PermissionBridge } from "../runtime/permission-bridge.js";
 import type { ProviderManager } from "../provider/manager.js";
@@ -50,16 +51,37 @@ export interface AppProps {
   readBranch?(): string | undefined;
   /** Lists the workspace's files (`/`-separated, relative) for the `@` menu; read when `@` is first typed. Omit to have no `@` menu. */
   listFiles?(): Promise<string[]>;
+  /** Messages typed in earlier sessions in this project, oldest first, for up-arrow and ctrl+r. */
+  initialHistory?: string[];
+  /** Called with each message sent (never with a `/provider` answer, which bypasses sending), so it can be remembered. */
+  onHistoryAdd?(text: string): void;
 }
 
 const noBranch = () => undefined;
 
-export function App({ initialSession, newSession, policy, permissions, cwd, providers, version, initialTheme, onThemeChange, readBranch = noBranch, listFiles }: AppProps) {
+export function App({
+  initialSession,
+  newSession,
+  policy,
+  permissions,
+  cwd,
+  providers,
+  version,
+  initialTheme,
+  onThemeChange,
+  readBranch = noBranch,
+  listFiles,
+  initialHistory,
+  onHistoryAdd,
+}: AppProps) {
   useAltScreen();
   const [themeName, setThemeName] = useState<ThemeName>(() => resolveThemeName(initialTheme, {}));
   const theme = getTheme(resolveThemeName(themeName));
   const { exit } = useApp();
+  // Keys can only be read from a terminal that supports raw mode (not piped input); Ink decides that from the stdin it was given.
+  const { isRawModeSupported } = useStdin();
   const { rows, columns } = useTerminalSize();
+  const terminalSize = useMemo(() => ({ rows, columns }), [rows, columns]);
 
   const [session, setSession] = useState(initialSession);
   const chat = useChat(session, permissions, cwd);
@@ -68,15 +90,29 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
   const shownCwd = useMemo(() => tildify(cwd, homedir()), [cwd]);
   const input = useTextInput();
   const [mode, setModeState] = useState<PermissionMode>(policy.mode);
-  const [submitted, setSubmitted] = useState<string[]>([]);
+  const [submitted, setSubmitted] = useState<string[]>(initialHistory ?? []);
   const history = useInputHistory(submitted);
   const [slashIndex, setSlashIndex] = useState(0);
   const [active, setActive] = useState(providers.active());
   const setup = useProviderSetup(providers, chat.notify, setActive);
 
+  // ctrl+r searches the earlier messages. While it is open the box shows the match; what was typed underneath is untouched
+  // until a match is taken. It never opens while /provider is asking for a key, so a key can never be searched for or shown.
+  const [search, setSearch] = useState<HistorySearch | null>(null);
+  const searchQuery = search?.query;
+  const searchMatches = useMemo(() => (searchQuery === undefined ? [] : historyMatches(submitted, searchQuery)), [submitted, searchQuery]);
+  const searchPosition = search ? Math.min(search.index, Math.max(0, searchMatches.length - 1)) : 0;
+  const searchShown = search ? searchMatches[searchPosition] : undefined;
+  const shownValue = searchShown ?? input.value;
+  const shownCursor = searchShown !== undefined ? searchShown.length : input.cursorOffset;
+
   // While /provider is asking for an answer, what is typed is that answer, not a message or a command.
   const slashMenuOpen =
-    setup.stage === "idle" && input.value.startsWith("/") && !input.value.includes("\n") && !input.value.slice(1).includes(" ");
+    setup.stage === "idle" &&
+    search === null &&
+    input.value.startsWith("/") &&
+    !input.value.includes("\n") &&
+    !input.value.slice(1).includes(" ");
   const filteredCommands = useMemo(() => {
     if (!slashMenuOpen) return [];
     const query = input.value.slice(1).toLowerCase();
@@ -92,7 +128,8 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
   // provider attaches to the turn. Esc closes it until the text changes.
   const [mentionIndex, setMentionIndex] = useState(0);
   const [mentionDismissedAt, setMentionDismissedAt] = useState<string | null>(null);
-  const mention = setup.stage === "idle" && !slashMenuOpen && !chat.isThinking ? activeMention(input.value, input.cursorOffset) : undefined;
+  const mention =
+    setup.stage === "idle" && search === null && !slashMenuOpen && !chat.isThinking ? activeMention(input.value, input.cursorOffset) : undefined;
   const workspaceFiles = useWorkspaceFiles(listFiles, mention !== undefined, chat.isThinking);
   const mentionQuery = mention?.query;
   const mentionHidden = mentionDismissedAt === input.value;
@@ -149,7 +186,11 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
 
     input.set("", 0);
     history.reset();
-    setSubmitted((previous) => [...previous, text]);
+    // The same message sent twice in a row is remembered once.
+    if (submitted[submitted.length - 1] !== text) {
+      setSubmitted((previous) => [...previous, text]);
+      onHistoryAdd?.(text);
+    }
 
     if (runSlashCommand(text, commandHost)) return;
     void chat.submit(text);
@@ -216,6 +257,26 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
 
       if (chat.isThinking) {
         if (key.escape) chat.cancel();
+        return;
+      }
+
+      if (search) {
+        const step = stepHistorySearch(search, typed, key, searchMatches.length);
+        if (step.outcome === "accept") {
+          if (searchShown !== undefined) {
+            input.set(searchShown);
+            history.reset();
+          }
+          setSearch(null);
+        } else if (step.outcome === "cancel") {
+          setSearch(null);
+        } else {
+          setSearch(step.search);
+        }
+        return;
+      }
+      if (key.ctrl && typed === "r" && setup.stage === "idle" && submitted.length > 0) {
+        setSearch({ query: "", index: 0 });
         return;
       }
 
@@ -287,11 +348,11 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
       // Text that arrives in one piece is a paste: line breaks come as \r, and an API key must not keep its trailing one.
       if (typed) input.insert(typed.length > 1 ? normalizePaste(typed, { singleLine: setup.stage === "field" }) : typed);
     },
-    { isActive: process.stdin.isTTY === true },
+    { isActive: isRawModeSupported },
   );
 
   // Home and End: Ink's useInput does not report them. Same moments as typing: not during an approval, a turn or the provider picker.
-  const typingAllowed = process.stdin.isTTY === true && !chat.pendingPermission && !chat.isThinking && setup.stage !== "select";
+  const typingAllowed = isRawModeSupported && !chat.pendingPermission && !chat.isThinking && setup.stage !== "select";
   useHomeEnd((edge: EdgeKey) => input.apply(edge === "home" ? moveToLineStart : moveToLineEnd), typingAllowed);
 
   const request = chat.pendingPermission;
@@ -301,8 +362,9 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
   const pickerOpen = setup.stage === "select";
   const listHeight = transcriptRows({
     rows,
-    inputValue: input.value,
+    inputValue: shownValue,
     thinking: showThinking,
+    historySearch: search !== null,
     slashMenuRows: mentionMenuOpen
       ? slashMenuRows(true, mentionMatches.length)
       : slashMenuRows(slashMenuOpen || pickerOpen, pickerOpen ? setup.menu.length : filteredCommands.length),
@@ -311,24 +373,32 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
 
   return (
     <ThemeContext.Provider value={theme}>
-      <Box flexDirection="column" height={rows}>
-        <MessageList cwd={cwd} version={version} height={listHeight} timeline={chat.timeline} expandedToolCallIds={chat.expandedToolCallIds} />
-        {showThinking && <ThinkingIndicator active outputChars={chat.outputChars} />}
-        {request && (
-          <PermissionPrompt
-            summary={summarizeToolCall(request.toolName, request.args)}
-            preview={chat.pendingPreview}
-            width={columns}
-            maxPreviewLines={maxPreviewLines}
-          />
-        )}
-        {pickerOpen && <SlashCommandMenu commands={setup.menu} selectedIndex={setup.selectedIndex} prefix="" />}
-        {setup.prompt && <SetupPrompt title={setup.prompt.title} label={setup.prompt.label} hint={setup.prompt.hint} error={setup.prompt.error} />}
-        {slashMenuOpen && <SlashCommandMenu commands={filteredCommands} selectedIndex={clampedSlashIndex} />}
-        {mentionMenuOpen && <SlashCommandMenu commands={mentionItems} selectedIndex={clampedMentionIndex} prefix="" truncate="start" />}
-        <InputBox value={input.value} cursorOffset={input.cursorOffset} mask={setup.prompt?.secret === true} placeholder={placeholder} />
-        <StatusLine model={active ? `${active.model} (${active.provider})` : "no provider"} mode={mode} cwd={shownCwd} branch={branch} context={chat.context} />
-      </Box>
+      <TerminalSizeContext.Provider value={terminalSize}>
+        <Box flexDirection="column" height={rows}>
+          <MessageList cwd={cwd} version={version} height={listHeight} timeline={chat.timeline} expandedToolCallIds={chat.expandedToolCallIds} />
+          {showThinking && <ThinkingIndicator active outputChars={chat.outputChars} />}
+          {request && (
+            <PermissionPrompt
+              summary={summarizeToolCall(request.toolName, request.args)}
+              preview={chat.pendingPreview}
+              width={columns}
+              maxPreviewLines={maxPreviewLines}
+            />
+          )}
+          {pickerOpen && <SlashCommandMenu commands={setup.menu} selectedIndex={setup.selectedIndex} prefix="" />}
+          {setup.prompt && <SetupPrompt title={setup.prompt.title} label={setup.prompt.label} hint={setup.prompt.hint} error={setup.prompt.error} />}
+          {slashMenuOpen && <SlashCommandMenu commands={filteredCommands} selectedIndex={clampedSlashIndex} />}
+          {mentionMenuOpen && <SlashCommandMenu commands={mentionItems} selectedIndex={clampedMentionIndex} prefix="" truncate="start" />}
+          {search && (
+            <HistorySearchLine
+              query={search.query}
+              position={searchMatches.length > 0 ? { current: searchPosition + 1, total: searchMatches.length } : undefined}
+            />
+          )}
+          <InputBox value={shownValue} cursorOffset={shownCursor} mask={setup.prompt?.secret === true} placeholder={placeholder} />
+          <StatusLine model={active ? `${active.model} (${active.provider})` : "no provider"} mode={mode} cwd={shownCwd} branch={branch} context={chat.context} />
+        </Box>
+      </TerminalSizeContext.Provider>
     </ThemeContext.Provider>
   );
 }

@@ -38,6 +38,11 @@ describe("transcriptRows", () => {
     expect(transcriptRows({ ...base, promptRows: 4 })).toBe(transcriptRows(base) - 4);
   });
 
+  it("gives up one row to the ctrl+r search line while it is showing", () => {
+    expect(transcriptRows({ ...base, historySearch: true })).toBe(transcriptRows(base) - 1);
+    expect(transcriptRows({ ...base, historySearch: false })).toBe(transcriptRows(base));
+  });
+
   it("grows the input box with extra lines but never past the cap", () => {
     expect(transcriptRows({ ...base, inputValue: "a\nb" })).toBe(transcriptRows(base) - 1);
     expect(transcriptRows({ ...base, inputValue: "x\n".repeat(50) })).toBe(40 - (maxInputBoxLines + 2) - 1);

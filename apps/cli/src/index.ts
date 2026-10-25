@@ -1,7 +1,7 @@
 #!/usr/bin/env -S npx tsx
 import React from "react";
 import { render } from "ink";
-import { loadPreferences, savePreferences } from "@cortex/config";
+import { appendHistory, loadHistory, loadPreferences, savePreferences } from "@cortex/config";
 import { App } from "./ui/App.js";
 import { USAGE, parseArgs } from "./cli/args.js";
 import { bootstrap } from "./runtime/bootstrap.js";
@@ -37,7 +37,7 @@ if (args.value.prompt !== undefined) {
   process.exit(exitCode);
 }
 
-const preferences = await loadPreferences();
+const [preferences, initialHistory] = await Promise.all([loadPreferences(), loadHistory(cwd)]);
 const app = render(
   React.createElement(App, {
     initialSession,
@@ -49,6 +49,9 @@ const app = render(
     version: readVersion(),
     readBranch: () => readGitBranch(cwd),
     listFiles: () => listWorkspaceFiles(cwd),
+    initialHistory,
+    // A message that can't be remembered is not worth interrupting the session for.
+    onHistoryAdd: (text) => void appendHistory(cwd, text).catch(() => undefined),
     initialTheme: preferences.theme,
     // A theme that can't be remembered is not worth interrupting the session for.
     onThemeChange: (theme) => void savePreferences({ theme }).catch(() => undefined),

@@ -8,6 +8,7 @@ import { maxInputBoxLines } from "./theme/copy.js";
 const BORDER_ROWS = 2;
 const STATUS_LINE_ROWS = 1;
 const THINKING_ROWS = 1;
+const SEARCH_ROWS = 1;
 const MIN_TRANSCRIPT_ROWS = 3;
 
 /** Rows of text shown in the input box: one per line typed, capped. */
@@ -24,6 +25,8 @@ export interface LayoutInput {
   rows: number;
   inputValue: string;
   thinking: boolean;
+  /** True while the ctrl+r search line is showing above the input box. */
+  historySearch?: boolean;
   slashMenuRows: number;
   /** Rows of the permission prompt, or 0 when none is showing. */
   promptRows: number;
@@ -35,6 +38,7 @@ export function transcriptRows(input: LayoutInput): number {
     inputTextRows(input.inputValue) +
     BORDER_ROWS +
     (input.thinking ? THINKING_ROWS : 0) +
+    (input.historySearch ? SEARCH_ROWS : 0) +
     input.slashMenuRows +
     input.promptRows +
     STATUS_LINE_ROWS;

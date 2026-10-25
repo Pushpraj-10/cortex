@@ -1,5 +1,5 @@
 import { useStdout } from "ink";
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 // ---- useAltScreen ----
 
@@ -45,8 +45,15 @@ export interface TerminalSize {
 
 const FALLBACK_SIZE: TerminalSize = { columns: 80, rows: 24 };
 
-/** Tracks the terminal's current size, updating on every resize event. */
-export function useTerminalSize(): TerminalSize {
+/**
+ * The size the app tracked once, shared with everything below it. Every `resize` listener is one more on the real stdout,
+ * and Node warns (to stderr, in the middle of the full-screen UI) past ten; with a component per message that limit is
+ * reached in a short conversation. So the root subscribes once and provides the size here.
+ */
+export const TerminalSizeContext = createContext<TerminalSize | undefined>(undefined);
+
+/** Follows the terminal's size, subscribing only when `enabled`. */
+function useWatchedSize(enabled: boolean): TerminalSize {
   const { stdout } = useStdout();
   const [size, setSize] = useState<TerminalSize>(() => ({
     columns: stdout?.columns ?? FALLBACK_SIZE.columns,
@@ -54,7 +61,7 @@ export function useTerminalSize(): TerminalSize {
   }));
 
   useEffect(() => {
-    if (!stdout) return;
+    if (!stdout || !enabled) return;
 
     const handleResize = () => {
       setSize({ columns: stdout.columns ?? FALLBACK_SIZE.columns, rows: stdout.rows ?? FALLBACK_SIZE.rows });
@@ -64,7 +71,17 @@ export function useTerminalSize(): TerminalSize {
     return () => {
       stdout.off("resize", handleResize);
     };
-  }, [stdout]);
+  }, [stdout, enabled]);
 
   return size;
+}
+
+/**
+ * The terminal's current size, updating on every resize. Inside a `TerminalSizeContext` it is the shared size and adds no
+ * listener of its own; with none (the root, or a component rendered on its own in a test) it subscribes itself.
+ */
+export function useTerminalSize(): TerminalSize {
+  const shared = useContext(TerminalSizeContext);
+  const own = useWatchedSize(shared === undefined);
+  return shared ?? own;
 }

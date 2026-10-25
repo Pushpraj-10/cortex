@@ -35,8 +35,18 @@ Cosmetic choices made in the app (today the `/theme`) live in `~/.cortex/prefere
 - `loadPreferences(home?)` — never throws
 - `savePreferences(values, home?)` — merges over what was saved, written through a temporary file and a rename
 
+## Message history (`src/history.ts`)
+
+The messages typed in a project, kept so up-arrow and ctrl+r can recall them in the next session. One file per project, `~/.cortex/history/<id>.jsonl`, where `<id>` is the first 16 hex characters of a hash of the project's folder (so one repo's messages are not offered in another, and the folder's name is not written into a file name). Each line is one JSON string, so a multi-line message stays on one line and a damaged line costs only itself. User level only and owner-only like credentials (`0600`, folder `0700`; not enforced on Windows). It is plain text.
+
+- `loadHistory(cwd, home?)` — the newest `MAX_HISTORY_ENTRIES` (500), oldest first; **never throws**: a missing, unreadable or damaged file is no history
+- `appendHistory(cwd, text, home?)` — ignores blank text and anything over `MAX_HISTORY_ENTRY_CHARS` (10,000, so a pasted log is not kept); rewrites the file with only the newest entries once it passes 256 KB; rejects if the file cannot be written, for the caller to catch
+- `historyPath(cwd, home?)`
+
+What goes in is the caller's decision. The CLI saves each message it sends and nothing typed into `/provider`, where an answer can be an API key (`apps/cli/test/ui/app.test.tsx` proves a typed or pasted key never reaches it).
+
 ## Files
 
-`settings.ts` · `memory.ts` · `credentials.ts` · `preferences.ts`. Depends on `@cortex/policy` and `@cortex/extensions` for types, and on `isPermissionMode` for validation.
+`settings.ts` · `memory.ts` · `credentials.ts` · `preferences.ts` · `history.ts`. Depends on `@cortex/policy` and `@cortex/extensions` for types, and on `isPermissionMode` for validation.
 
 Tests: `npm test -w @cortex/config`.
