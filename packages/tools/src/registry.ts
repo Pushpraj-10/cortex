@@ -1,5 +1,5 @@
 import { CortexError } from "@cortex/core";
-import type { ToolDefinition } from "../types.js";
+import type { ToolDefinition } from "./types.js";
 
 export class UnknownToolError extends CortexError {
   constructor(name: string) {

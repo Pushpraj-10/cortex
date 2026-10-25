@@ -7,6 +7,7 @@ describe("toToolSpec", () => {
     const tool: ToolDefinition = {
       name: "read_file",
       description: "Read a file",
+      kind: "read" as const,
       parametersSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] },
       handler: async () => ({ ok: true, value: undefined }),
     };

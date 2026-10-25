@@ -8,6 +8,7 @@ describe("createToolsExecutor", () => {
     registerTool({
       name: "executor-test-echo",
       description: "Echoes args back",
+      kind: "read" as const,
       parametersSchema: { type: "object" },
       handler: async (args, context) => ok({ args, cwd: context.cwd }),
     });
@@ -22,6 +23,7 @@ describe("createToolsExecutor", () => {
     registerTool({
       name: "executor-test-fail",
       description: "Always fails",
+      kind: "read" as const,
       parametersSchema: { type: "object" },
       handler: async () => err(new CortexError("boom", "TEST_BOOM")),
     });
@@ -42,6 +44,7 @@ describe("createToolsExecutor", () => {
     registerTool({
       name: "executor-test-signal",
       description: "Captures the signal it was called with",
+      kind: "read" as const,
       parametersSchema: { type: "object" },
       handler: async (_args, context) => {
         capturedSignal = context.signal;

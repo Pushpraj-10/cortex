@@ -1,22 +1,25 @@
 /**
- * @cortex/tools — a registry of tools the agent can execute.
- * Each tool is a self-contained file operation with clear input/output contracts.
+ * @cortex/tools — the tools an agent can execute, plus a registry to look them up by name.
+ * Each tool declares what it does to the world (`kind`), so approval policy never needs to
+ * know tool names.
  */
 
-// Shared types
-export type { ToolDefinition, ToolExecutionContext } from "./types.js";
+export type { ToolDefinition, ToolExecutionContext, ToolKind } from "./types.js";
+export { ToolError, argText, defineTool } from "./define-tool.js";
+export { UnknownToolError, getTool, listTools, registerTool } from "./registry.js";
+export { builtinTools } from "./builtin-tools.js";
 
-// Core registry
-export { registerTool, getTool, listTools, UnknownToolError } from "./core/tool-registry.js";
-
-// File system tools
-export { readFileTool } from "./file-system/read-file.js";
-export { writeFileTool } from "./file-system/write-file.js";
-export { editFileTool } from "./file-system/edit-file.js";
-export { deleteFileTool } from "./file-system/delete-file.js";
-export { listDirectoryTool } from "./file-system/list-directory.js";
-export { createDirectoryTool } from "./file-system/create-directory.js";
-export { moveFileTool } from "./file-system/move-file.js";
-export { copyFileTool } from "./file-system/copy-file.js";
-export { fileExistsTool } from "./file-system/file-exists.js";
-export { getFileInfoTool } from "./file-system/get-file-info.js";
+export {
+  copyFileTool,
+  createDirectoryTool,
+  deleteFileTool,
+  editFileTool,
+  fileExistsTool,
+  getFileInfoTool,
+  listDirectoryTool,
+  moveFileTool,
+  readFileTool,
+  writeFileTool,
+} from "./filesystem.js";
+export { findFilesTool, searchFilesTool } from "./search.js";
+export { runCommandTool, type RunCommandResult } from "./shell.js";
