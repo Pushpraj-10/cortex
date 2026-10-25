@@ -5,7 +5,7 @@ A local-first CLI coding agent. It talks to a model — Ollama on your machine, 
 ## Install
 
 ```
-npm install -g @pushpraj-10/cortex
+npm install -g @pushpraj_10/cortex
 cd your-project
 cortex                    # full-screen terminal UI, working on the current folder
 cortex -p "explain what src/index.ts does"    # one shot: answer to stdout
