@@ -7,8 +7,8 @@
  *
  * How it gets a fine shape out of text: a braille character is a 2x4 grid of dots, so one terminal cell
  * carries 8 pixels (a half-block carries 2). The image's bright strokes are found, the shape is fitted into
- * a grid of dots, and each dot is lit when enough of its patch of the image is stroke. Each cell also keeps
- * where its colour sits between the logo's two ends (green 0 .. cyan 9), so a theme can recolour it.
+ * a grid of dots, and each dot is lit when enough of its patch of the image is stroke. Colour is not kept:
+ * the UI draws the emblem in the theme's primary colour.
  *
  * The PNG is decoded here with node:zlib (8-bit RGBA, not interlaced), so the tool needs no dependency.
  */
@@ -102,27 +102,7 @@ function findStrokes({ width, height, pixels }) {
   return { mask, box };
 }
 
-/** Where a stroke pixel's colour sits between the logo's green end (0) and cyan end (1): the blue channel rises from one to the other. */
-function toneEnds(image, mask, box) {
-  const { width, pixels } = image;
-  const band = Math.max(1, Math.round((box.y1 - box.y0) * 0.1));
-  const mean = (yFrom, yTo) => {
-    let sum = [0, 0, 0];
-    let count = 0;
-    for (let y = yFrom; y < yTo; y += 1) {
-      for (let x = box.x0; x <= box.x1; x += 1) {
-        if (!mask[y * width + x]) continue;
-        const i = (y * width + x) * 4;
-        sum = [sum[0] + pixels[i], sum[1] + pixels[i + 1], sum[2] + pixels[i + 2]];
-        count += 1;
-      }
-    }
-    return sum.map((channel) => Math.round(channel / Math.max(1, count)));
-  };
-  return { top: mean(box.y0, box.y0 + band), bottom: mean(box.y1 - band, box.y1) };
-}
-
-// ---- summed-area tables: the stroke share of any rectangle in constant time ----------
+// ---- summed-area table: the stroke share of any rectangle in constant time ------------
 
 function integral(width, height, value) {
   const table = new Float64Array((width + 1) * (height + 1));
@@ -148,11 +128,10 @@ const BIT = [
   [0x08, 0x10, 0x20, 0x80],
 ];
 
-function renderEmblem(image, strokes, ends, { rows, columns }) {
-  const { width, height, pixels } = image;
+function renderEmblem(image, strokes, { rows, columns }) {
+  const { width, height } = image;
   const { mask, box } = strokes;
   const covered = integral(width, height, (x, y) => mask[y * width + x]);
-  const blue = integral(width, height, (x, y) => (mask[y * width + x] ? pixels[(y * width + x) * 4 + 2] : 0));
 
   // Fit the shape (plus margin) into the dot grid without distorting it, centred.
   const boxW = box.x1 - box.x0 + 1;
@@ -165,41 +144,26 @@ function renderEmblem(image, strokes, ends, { rows, columns }) {
   const originY = box.y0 - pad - (dotsH / scale - (boxH + 2 * pad)) / 2;
   const at = (dotX, dotY) => [originX + dotX / scale, originY + dotY / scale];
 
-  const blueLow = ends.top[2];
-  const blueHigh = ends.bottom[2];
   const dots = [];
-  const art = { rows: [], tones: [] };
+  const art = { rows: [] };
 
   for (let row = 0; row < rows; row += 1) {
     let glyphs = "";
-    let tones = "";
     for (let column = 0; column < columns; column += 1) {
-      let mask8 = 0;
+      let cell = 0;
       for (let dx = 0; dx < 2; dx += 1) {
         for (let dy = 0; dy < 4; dy += 1) {
           const [x0, y0] = at(column * 2 + dx, row * 4 + dy);
           const [x1, y1] = at(column * 2 + dx + 1, row * 4 + dy + 1);
           const share = covered(x0, y0, x1, y1) / Math.max(1, (x1 - x0) * (y1 - y0));
           const lit = share >= DOT_COVERAGE;
-          if (lit) mask8 |= BIT[dx][dy];
+          if (lit) cell |= BIT[dx][dy];
           (dots[row * 4 + dy] ??= [])[column * 2 + dx] = lit ? "#" : ".";
         }
       }
-      if (mask8 === 0) {
-        glyphs += " ";
-        tones += " ";
-        continue;
-      }
-      const [cx0, cy0] = at(column * 2, row * 4);
-      const [cx1, cy1] = at(column * 2 + 2, row * 4 + 4);
-      const pixelsInCell = Math.max(1, covered(cx0, cy0, cx1, cy1));
-      const meanBlue = blue(cx0, cy0, cx1, cy1) / pixelsInCell;
-      const tone = Math.min(1, Math.max(0, (meanBlue - blueLow) / Math.max(1, blueHigh - blueLow)));
-      glyphs += String.fromCharCode(0x2800 + mask8);
-      tones += String(Math.round(tone * 9));
+      glyphs += cell === 0 ? " " : String.fromCharCode(0x2800 + cell);
     }
     art.rows.push(glyphs);
-    art.tones.push(tones);
   }
   return { art, dots };
 }
@@ -214,12 +178,9 @@ if (!source) {
 
 const image = decodePng(readFileSync(source));
 const strokes = findStrokes(image);
-const ends = toneEnds(image, strokes.mask, strokes.box);
-const rgb = ([r, g, b]) => `#${[r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
 console.log(`image ${image.width}x${image.height}, shape ${strokes.box.x1 - strokes.box.x0 + 1}x${strokes.box.y1 - strokes.box.y0 + 1} px`);
-console.log(`stroke colour at the top ${rgb(ends.top)}, at the bottom ${rgb(ends.bottom)}`);
 
-const generated = Object.entries(SIZES).map(([name, size]) => ({ name, size, ...renderEmblem(image, strokes, ends, size) }));
+const generated = Object.entries(SIZES).map(([name, size]) => ({ name, size, ...renderEmblem(image, strokes, size) }));
 
 if (flags.includes("--preview")) {
   for (const { name, size, art, dots } of generated) {
@@ -232,22 +193,20 @@ if (flags.includes("--preview")) {
 }
 
 const target = path.join(path.dirname(fileURLToPath(import.meta.url)), "../src/ui/logo/emblem-art.ts");
-const literal = (lines) => `[\n${lines.map((line) => `    ${JSON.stringify(line)},`).join("\n")}\n  ]`;
 const body = generated
-  .map(({ name, art }) => `export const ${name}: EmblemArt = {\n  rows: ${literal(art.rows)},\n  tones: ${literal(art.tones)},\n};\n`)
+  .map(({ name, art }) => `export const ${name}: EmblemArt = {\n  rows: [\n${art.rows.map((line) => `    ${JSON.stringify(line)},`).join("\n")}\n  ],\n};\n`)
   .join("\n");
 
 writeFileSync(
   target,
   `/**
  * The terminal emblem, as data. GENERATED by apps/cli/tools/make-logo.mjs from the logo image: do not edit by hand,
- * run the tool again instead. Each row is braille characters (a 2x4 dot grid per cell); \`tones\` has one digit per
- * cell, 0 for the logo's green end to 9 for its cyan end, so a theme's gradient can colour it. A space is an empty cell.
+ * run the tool again instead. Each row is braille characters (a 2x4 dot grid per cell); a space is an empty cell.
+ * Colour is not stored: the UI draws it in the theme's primary colour.
  */
 
 export interface EmblemArt {
   rows: string[];
-  tones: string[];
 }
 
 ${body}`,

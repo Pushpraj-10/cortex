@@ -20,12 +20,12 @@ export function Inline({ text }: { text: string }) {
             italic={span.italic}
             strikethrough={span.strike}
             underline={span.link !== undefined}
-            color={span.link !== undefined ? theme.text.link : span.code ? theme.text.accent : undefined}
+            color={span.link !== undefined || span.code ? theme.secondary : undefined}
           >
             {span.text}
           </Text>
           {span.link !== undefined && span.link.replace(/\/$/, "") !== span.text.replace(/\/$/, "") && (
-            <Text color={theme.text.secondary}> ({span.link})</Text>
+            <Text color={theme.muted}> ({span.link})</Text>
           )}
         </React.Fragment>
       ))}

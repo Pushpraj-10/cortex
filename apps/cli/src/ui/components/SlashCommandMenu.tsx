@@ -14,20 +14,20 @@ export function SlashCommandMenu({ commands, selectedIndex, prefix = "/" }: Slas
   const theme = useTheme();
   if (commands.length === 0) {
     return (
-      <Box borderStyle="round" borderColor={theme.border.default} paddingX={1}>
-        <Text color={theme.text.secondary}>No matching commands</Text>
+      <Box borderStyle="round" borderColor={theme.border} paddingX={1}>
+        <Text color={theme.muted}>No matching commands</Text>
       </Box>
     );
   }
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={theme.border.focus} paddingX={1}>
+    <Box flexDirection="column" borderStyle="round" borderColor={theme.primary} paddingX={1}>
       {commands.map((command, i) => {
         const selected = i === selectedIndex;
         return (
-          <Text key={command.name} color={selected ? theme.text.accent : undefined} bold={selected}>
+          <Text key={command.name} color={selected ? theme.primary : undefined} bold={selected}>
             {selected ? "› " : "  "}{prefix}{command.name}
-            <Text color={theme.text.secondary}> — {command.description}</Text>
+            <Text color={theme.muted}> — {command.description}</Text>
           </Text>
         );
       })}

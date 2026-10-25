@@ -21,12 +21,12 @@ export function InputBox({ value, cursorOffset, mask = false }: InputBoxProps) {
   const contentHeight = Math.min(lines.length, maxInputBoxLines);
 
   return (
-    <Box borderStyle="round" borderColor={theme.border.focus} paddingX={1} width="100%">
-      <Text color={theme.text.accent}>{"> "}</Text>
+    <Box borderStyle="round" borderColor={theme.primary} paddingX={1} width="100%">
+      <Text color={theme.primary}>{"> "}</Text>
       {isEmpty ? (
         <Text>
           <Text inverse> </Text>
-          <Text color={theme.text.secondary} dimColor>
+          <Text color={theme.muted} dimColor>
             {placeholder}
           </Text>
         </Text>

@@ -16,7 +16,7 @@ export function CodeBlock({ language, content }: CodeBlockProps) {
   const theme = useTheme();
   // Tabs have no reliable width in a terminal layout, so they become two spaces.
   const lines = useMemo(() => highlightLines(content.replace(/\t/g, "  "), language), [content, language]);
-  const border = theme.border.default;
+  const border = theme.border;
 
   return (
     <Box flexDirection="column">

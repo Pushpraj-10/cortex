@@ -16,11 +16,13 @@ function Info({ cwd, version, tip }: BannerProps & { tip: string }) {
   const theme = useTheme();
   return (
     <Box flexDirection="column">
-      <Text color={theme.text.secondary}>
-        {tagline} · v{version}
+      <Text color={theme.muted}>
+        {tagline} · <Text color={theme.secondary}>v{version}</Text>
       </Text>
-      <Text color={theme.text.secondary}>{cwd}</Text>
-      <Text color={theme.text.secondary}>Tip: {tip}</Text>
+      <Text color={theme.muted}>{cwd}</Text>
+      <Text color={theme.muted}>
+        <Text color={theme.secondary}>Tip:</Text> {tip}
+      </Text>
     </Box>
   );
 }

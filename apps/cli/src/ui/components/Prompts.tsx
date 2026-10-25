@@ -13,11 +13,11 @@ export const PERMISSION_PROMPT_ROWS = 4;
 export function PermissionPrompt({ summary }: { summary: string }) {
   const theme = useTheme();
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={theme.border.focus} paddingX={1}>
+    <Box flexDirection="column" borderStyle="round" borderColor={theme.primary} paddingX={1}>
       <Text>
         Allow <Text bold>{summary}</Text>?
       </Text>
-      <Text color={theme.text.secondary}>y / enter allow · n / esc deny</Text>
+      <Text color={theme.muted}>y / enter allow · n / esc deny</Text>
     </Box>
   );
 }
@@ -41,14 +41,14 @@ interface SetupPromptProps {
 export function SetupPrompt({ title, label, hint, error }: SetupPromptProps) {
   const theme = useTheme();
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={theme.border.focus} paddingX={1}>
+    <Box flexDirection="column" borderStyle="round" borderColor={theme.primary} paddingX={1}>
       <Text>
         <Text bold>{title}</Text> — {label}
       </Text>
       {error ? (
         <Text color={theme.status.error}>{error}</Text>
       ) : (
-        <Text color={theme.text.secondary}>{hint} · enter to confirm · esc to cancel</Text>
+        <Text color={theme.muted}>{hint} · enter to confirm · esc to cancel</Text>
       )}
     </Box>
   );

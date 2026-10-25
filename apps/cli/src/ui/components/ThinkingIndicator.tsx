@@ -18,8 +18,8 @@ export function ThinkingIndicator({ active }: ThinkingIndicatorProps) {
   if (!active) return null;
 
   return (
-    <Text color={theme.text.accent}>
-      {frame} {verb}… <Text color={theme.text.secondary}>({elapsed}s · esc to interrupt)</Text>
+    <Text color={theme.primary}>
+      {frame} {verb}… <Text color={theme.muted}>({elapsed}s · esc to interrupt)</Text>
     </Text>
   );
 }

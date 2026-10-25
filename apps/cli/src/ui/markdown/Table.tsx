@@ -15,7 +15,7 @@ interface TableProps {
 export function Table({ rows, align, width }: TableProps) {
   const theme = useTheme();
   const layout = useMemo(() => layoutTable(rows, align, width), [rows, align, width]);
-  const border = theme.border.default;
+  const border = theme.border;
 
   return (
     <Box flexDirection="column">

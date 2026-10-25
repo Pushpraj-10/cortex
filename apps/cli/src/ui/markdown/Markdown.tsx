@@ -27,7 +27,7 @@ function Heading({ level, text }: { level: number; text: string }) {
   const theme = useTheme();
   if (level <= 2) {
     return (
-      <Text bold underline={level === 1} color={theme.text.accent}>
+      <Text bold underline={level === 1} color={theme.primary}>
         <Inline text={text} />
       </Text>
     );
@@ -40,7 +40,7 @@ function Heading({ level, text }: { level: number; text: string }) {
     );
   }
   return (
-    <Text italic color={theme.text.secondary}>
+    <Text italic color={theme.muted}>
       <Inline text={text} />
     </Text>
   );
@@ -62,7 +62,7 @@ function ListView({ items }: { items: ListItem[] }) {
       {items.map((item, index) => {
         const marker = markers[index]!;
         const width = (item.number !== undefined && item.checked === undefined ? numberWidth : marker.length) + 1;
-        const color = item.checked === true ? theme.status.success : item.checked === false ? theme.text.secondary : theme.text.accent;
+        const color = item.checked === true ? theme.status.success : item.checked === false ? theme.muted : theme.primary;
         return (
           <Box key={index} paddingLeft={item.depth * LIST_INDENT}>
             <Box width={width} flexShrink={0}>
@@ -101,11 +101,11 @@ function BlockView({ block, width }: { block: Block; width: number }) {
     case "quote":
       return (
         <Box>
-          <Text color={theme.text.secondary}>▎ </Text>
+          <Text color={theme.muted}>▎ </Text>
           <Box flexDirection="column" flexGrow={1}>
             {block.text.split("\n").map((paragraph, index) => (
               <Box key={index} marginTop={index === 0 ? 0 : 1}>
-                <Text wrap="wrap" color={theme.text.secondary}>
+                <Text wrap="wrap" color={theme.muted}>
                   <Inline text={paragraph} />
                 </Text>
               </Box>
@@ -118,7 +118,7 @@ function BlockView({ block, width }: { block: Block; width: number }) {
     case "table":
       return <Table rows={block.rows} align={block.align} width={width} />;
     case "rule":
-      return <Text color={theme.border.default}>{"─".repeat(Math.max(1, Math.min(width, MAX_RULE_WIDTH)))}</Text>;
+      return <Text color={theme.border}>{"─".repeat(Math.max(1, Math.min(width, MAX_RULE_WIDTH)))}</Text>;
   }
 }
 

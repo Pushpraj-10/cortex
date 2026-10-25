@@ -18,7 +18,7 @@ export function MessageBubble({ message }: { message: MessageEntry }) {
   if (message.role === "user") {
     return (
       <Box marginBottom={1}>
-        <Text color={theme.text.accent}>{"> "}</Text>
+        <Text color={theme.primary}>{"> "}</Text>
         <Text>{message.content}</Text>
       </Box>
     );
@@ -51,11 +51,11 @@ export function ToolCallBlock({ data, expanded }: { data: ToolCallEntry; expande
   return (
     <Box flexDirection="column" marginBottom={1}>
       <Text>
-        <Text color={theme.text.accent}>{expanded ? "⏺" : "●"}</Text> {data.summary}
+        <Text color={theme.primary}>{expanded ? "⏺" : "●"}</Text> {data.summary}
       </Text>
       {expanded && (
-        <Box marginLeft={2} borderStyle="round" borderColor={theme.border.default} paddingX={1}>
-          <Text color={theme.text.secondary}>{data.detail}</Text>
+        <Box marginLeft={2} borderStyle="round" borderColor={theme.border} paddingX={1}>
+          <Text color={theme.muted}>{data.detail}</Text>
         </Box>
       )}
     </Box>
@@ -68,7 +68,7 @@ function NoticeLine({ notice }: { notice: NoticeEntry }) {
   const theme = useTheme();
   return (
     <Box marginBottom={1} marginLeft={2}>
-      <Text color={theme.text.secondary}>{notice.text}</Text>
+      <Text color={theme.muted}>{notice.text}</Text>
     </Box>
   );
 }
