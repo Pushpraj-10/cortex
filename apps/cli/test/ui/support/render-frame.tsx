@@ -5,10 +5,10 @@ import { render } from "ink";
 
 const ANSI = /\u001b\[[0-9;?]*[A-Za-z]/g;
 
-export async function renderFrame(element: React.ReactElement, columns = 80): Promise<string> {
+export async function renderFrame(element: React.ReactElement, columns = 80, rows = 40): Promise<string> {
   const stdout = new PassThrough() as PassThrough & { columns: number; rows: number; isTTY: boolean };
   stdout.columns = columns;
-  stdout.rows = 40;
+  stdout.rows = rows;
   stdout.isTTY = false;
 
   const writes: string[] = [];

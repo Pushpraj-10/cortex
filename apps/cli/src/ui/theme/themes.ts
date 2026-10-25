@@ -45,9 +45,9 @@ const dark: Theme = {
   diff: { added: "#0F3D26", removed: "#4A1C1D" },
   border: { default: "#3B4256", focus: "#749BFF" },
   syntax: { keyword: "#B794F6", string: "#5FD38D", number: "#F5C451", comment: "#6B7385", title: "#6CA7FF", type: "#4DD0C8", builtin: "#FF9F6B" },
-  // The colours of Google Antigravity's icon, ordered so each neighbouring pair blends cleanly:
-  // yellow to green to blue, then through purple to red.
-  gradient: ["#FFE432", "#00B95C", "#3186FF", "#FC413D"],
+  // The logo's own two ends, sampled from the image: neon green fading to cyan. The emblem and the
+  // wordmark both read their colours from this.
+  gradient: ["#30F679", "#1FF6EC"],
 };
 
 const light: Theme = {
@@ -57,8 +57,8 @@ const light: Theme = {
   diff: { added: "#D3F0DF", removed: "#FAD7D5" },
   border: { default: "#B6BCCB", focus: "#1A5FD1" },
   syntax: { keyword: "#7A3FD0", string: "#0B7A43", number: "#A15C00", comment: "#6A7283", title: "#1257B8", type: "#0A7C74", builtin: "#B4531A" },
-  // The same four colours, deepened so they stay readable on a light background.
-  gradient: ["#D9A600", "#00873F", "#1F6BE0", "#D93025"],
+  // The same two ends, deepened so they stay readable on a light background.
+  gradient: ["#0E9F4F", "#0891A8"],
 };
 
 const mono: Theme = {
