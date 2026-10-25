@@ -56,7 +56,7 @@ behavior that would add one.
   credentials (user-level, owner-only file — never the project), and never logged, echoed into the
   transcript or input history, or included in an error or notice. A test should prove it for any
   new code path that handles one.
-- **Providers are chosen only in `apps/cli`** (`provider-config.ts`, `bootstrap.ts`); other
+- **Providers are chosen only in `apps/cli`** (`provider/config.ts`, `runtime/bootstrap.ts`); other
   packages go through the registry in `@cortex/providers`.
 
 Before committing: `npm run typecheck && npm test`.

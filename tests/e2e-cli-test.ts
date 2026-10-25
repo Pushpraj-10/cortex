@@ -12,7 +12,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-import { bootstrap } from "../apps/cli/src/bootstrap.js";
+import { bootstrap } from "../apps/cli/src/runtime/bootstrap.js";
 import { isLlmFailureMessage } from "../apps/cli/src/format/tool-calls.js";
 import type { AgentEvent } from "../packages/agent/src/index.js";
 

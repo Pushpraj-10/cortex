@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { HELP_TEXT, runSlashCommand, slashCommands, type CommandHost } from "../src/commands.js";
+import { HELP_TEXT, runSlashCommand, slashCommands, type CommandHost } from "../../src/ui/commands.js";
 
 function host(overrides: Partial<CommandHost> = {}): CommandHost {
   return {

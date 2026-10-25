@@ -1,7 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
-import { maskValue } from "../provider-setup.js";
-import { locateCursor } from "../text-edit.js";
+import { maskValue } from "../../provider/setup.js";
+import { locateCursor } from "../hooks/useTextInput.js";
 import { colors, maxInputBoxLines, placeholder } from "../theme.js";
 
 interface InputBoxProps {

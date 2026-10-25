@@ -30,8 +30,8 @@ import {
 } from "@cortex/providers";
 import { builtinTools, registerTool } from "@cortex/tools";
 import { createPermissionBridge, type PermissionBridge } from "./permission-bridge.js";
-import { credentialsToEnv, layerEnv, selectProvider } from "./provider-config.js";
-import { createProviderManager, type ProviderManager } from "./provider-manager.js";
+import { credentialsToEnv, layerEnv, selectProvider } from "../provider/config.js";
+import { createProviderManager, type ProviderManager } from "../provider/manager.js";
 
 export interface BootOptions {
   cwd: string;

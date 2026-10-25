@@ -1,11 +1,11 @@
 #!/usr/bin/env -S npx tsx
 import React from "react";
 import { render } from "ink";
-import { App } from "./App.js";
-import { USAGE, parseArgs } from "./args.js";
-import { bootstrap } from "./bootstrap.js";
-import { loadDotEnv } from "./env.js";
-import { runOnce } from "./run-once.js";
+import { App } from "./ui/App.js";
+import { USAGE, parseArgs } from "./cli/args.js";
+import { bootstrap } from "./runtime/bootstrap.js";
+import { loadDotEnv } from "./cli/env.js";
+import { runOnce } from "./cli/run-once.js";
 
 const args = parseArgs(process.argv.slice(2));
 if (!args.ok) {

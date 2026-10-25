@@ -28,6 +28,6 @@ const reply = await provider.chat({ messages, tools, signal });   // Result<Chat
 
 ## Adding a provider
 
-Create `src/<name>.ts` with the config interface, the request/response mapping, `create<Name>Client`, and a descriptor; export them from `src/index.ts`; register the descriptor in `apps/cli/src/bootstrap.ts` and add its env resolution to `apps/cli/src/provider-config.ts`. Test it like the others, by stubbing `fetch`.
+Create `src/<name>.ts` with the config interface, the request/response mapping, `create<Name>Client`, and a descriptor; export them from `src/index.ts`; register the descriptor in `apps/cli/src/runtime/bootstrap.ts` and add its env resolution to `apps/cli/src/provider/config.ts`. Test it like the others, by stubbing `fetch`.
 
 Tests: `npm test -w @cortex/providers`.

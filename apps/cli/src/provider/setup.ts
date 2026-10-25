@@ -4,8 +4,8 @@
  * the screen, the disk or the network, so it can be tested exhaustively.
  */
 import type { StoredProvider } from "@cortex/config";
-import type { ProviderId } from "./provider-config.js";
-import type { ProviderStatus } from "./provider-manager.js";
+import type { ProviderId } from "./config.js";
+import type { ProviderStatus } from "./manager.js";
 
 export interface FieldSpec {
   key: keyof StoredProvider;

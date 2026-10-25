@@ -1,5 +1,5 @@
 import type { AgentSession } from "@cortex/agent";
-import { isLlmFailureMessage, summarizeToolCall } from "./format/tool-calls.js";
+import { isLlmFailureMessage, summarizeToolCall } from "../format/tool-calls.js";
 
 /**
  * Non-interactive run (`cortex -p "..."`): the agent's answer goes to stdout and its tool calls to

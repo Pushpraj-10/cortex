@@ -3,7 +3,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { saveProviderCredentials } from "@cortex/config";
 import { getTool } from "@cortex/tools";
-import { bootstrap } from "../src/bootstrap.js";
+import { bootstrap } from "../../src/runtime/bootstrap.js";
 
 describe("bootstrap", () => {
   let root: string;

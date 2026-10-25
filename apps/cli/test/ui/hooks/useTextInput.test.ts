@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deleteBefore, insertAt, locateCursor, moveCursor } from "../src/text-edit.js";
+import { deleteBefore, insertAt, locateCursor, moveCursor } from "../../../src/ui/hooks/useTextInput.js";
 
 describe("insertAt", () => {
   it("inserts at the cursor and advances it", () => {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { AgentSession } from "@cortex/agent";
-import { formatToolResultDetail, isLlmFailureMessage, summarizeToolCall } from "../format/tool-calls.js";
-import type { PermissionBridge, PermissionRequest } from "../permission-bridge.js";
+import { formatToolResultDetail, isLlmFailureMessage, summarizeToolCall } from "../../format/tool-calls.js";
+import type { PermissionBridge, PermissionRequest } from "../../runtime/permission-bridge.js";
 import type { TimelineEntry } from "../types.js";
 
 function nextId(prefix: string): string {

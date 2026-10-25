@@ -16,7 +16,7 @@ import {
   resolveOllamaConfig,
   resolveProvider,
   selectProvider,
-} from "../src/provider-config.js";
+} from "../../src/provider/config.js";
 
 describe("resolveOllamaConfig", () => {
   it("returns an error Result when OLLAMA_MODEL is not set", () => {

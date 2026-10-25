@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createPermissionBridge } from "../src/permission-bridge.js";
+import { createPermissionBridge } from "../../src/runtime/permission-bridge.js";
 
 describe("createPermissionBridge", () => {
   it("passes a request to the registered handler and settles with the answer", async () => {

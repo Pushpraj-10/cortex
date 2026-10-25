@@ -6,20 +6,19 @@ import { PERMISSION_MODES, type PermissionMode } from "@cortex/policy";
 import { runSlashCommand, slashCommands, type CommandHost } from "./commands.js";
 import { InputBox } from "./components/InputBox.js";
 import { MessageList } from "./components/Messages.js";
-import { PERMISSION_PROMPT_ROWS, PermissionPrompt } from "./components/PermissionPrompt.js";
-import { SETUP_PROMPT_ROWS, SetupPrompt } from "./components/SetupPrompt.js";
+import { PERMISSION_PROMPT_ROWS, PermissionPrompt, SETUP_PROMPT_ROWS, SetupPrompt } from "./components/Prompts.js";
 import { SlashCommandMenu } from "./components/SlashCommandMenu.js";
 import { StatusLine } from "./components/StatusLine.js";
 import { ThinkingIndicator } from "./components/ThinkingIndicator.js";
-import { summarizeToolCall } from "./format/tool-calls.js";
+import { summarizeToolCall } from "../format/tool-calls.js";
 import { useChat } from "./hooks/useChat.js";
 import { useInputHistory } from "./hooks/useInputHistory.js";
 import { useProviderSetup } from "./hooks/useProviderSetup.js";
 import { useTextInput } from "./hooks/useTextInput.js";
 import { useAltScreen, useTerminalSize } from "./hooks/terminal.js";
 import { slashMenuRows, transcriptRows } from "./layout.js";
-import type { PermissionBridge } from "./permission-bridge.js";
-import type { ProviderManager } from "./provider-manager.js";
+import type { PermissionBridge } from "../runtime/permission-bridge.js";
+import type { ProviderManager } from "../provider/manager.js";
 import type { SlashCommand } from "./types.js";
 
 export interface AppProps {

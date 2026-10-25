@@ -1,7 +1,7 @@
 import { useState } from "react";
-import type { ProviderId } from "../provider-config.js";
-import type { ActiveProvider, ProviderManager } from "../provider-manager.js";
-import { PROVIDER_LABELS, currentField, describeStatus, promptHint, startSetup, submitField, type SetupState } from "../provider-setup.js";
+import type { ProviderId } from "../../provider/config.js";
+import type { ActiveProvider, ProviderManager } from "../../provider/manager.js";
+import { PROVIDER_LABELS, currentField, describeStatus, promptHint, startSetup, submitField, type SetupState } from "../../provider/setup.js";
 import type { SlashCommand } from "../types.js";
 
 type Flow =
@@ -39,7 +39,7 @@ const messageOf = (error: unknown) => (error instanceof Error ? error.message : 
 
 /**
  * The `/provider` flow: pick a provider, answer its questions one at a time, then save and switch to it.
- * The steps themselves live in provider-setup.ts; this wires them to the provider manager and reports
+ * The steps themselves live in provider/setup.ts; this wires them to the provider manager and reports
  * results through `notify`. Every message it produces names providers, models and paths only — never an answer.
  */
 export function useProviderSetup(

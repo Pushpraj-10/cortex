@@ -23,7 +23,7 @@ import {
   resolveProvider,
   type ProviderChoice,
   type ProviderId,
-} from "./provider-config.js";
+} from "./config.js";
 
 export interface ActiveProvider {
   provider: ProviderId;

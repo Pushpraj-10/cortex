@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseArgs, UsageError } from "../src/args.js";
+import { parseArgs, UsageError } from "../../src/cli/args.js";
 
 describe("parseArgs", () => {
   it("returns defaults for no arguments", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PROVIDER_IDS } from "../src/provider-config.js";
+import { PROVIDER_IDS } from "../../src/provider/config.js";
 import {
   PROVIDER_FIELDS,
   currentField,
@@ -8,7 +8,7 @@ import {
   promptHint,
   startSetup,
   submitField,
-} from "../src/provider-setup.js";
+} from "../../src/provider/setup.js";
 
 describe("PROVIDER_FIELDS", () => {
   it("asks something for every provider, and only ever treats the API key as secret", () => {

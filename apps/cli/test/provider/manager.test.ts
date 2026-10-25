@@ -8,8 +8,8 @@ import {
   ollamaProviderDescriptor,
   registerLlmProvider,
 } from "@cortex/providers";
-import { resolveProvider } from "../src/provider-config.js";
-import { createProviderManager } from "../src/provider-manager.js";
+import { resolveProvider } from "../../src/provider/config.js";
+import { createProviderManager } from "../../src/provider/manager.js";
 
 const SECRET = "AIza-very-secret-key";
 

@@ -3,7 +3,7 @@
  * the permission mode, quit) and never reach the model.
  */
 import { PERMISSION_MODES, isPermissionMode, type PermissionMode } from "@cortex/policy";
-import { PROVIDER_IDS, isProviderId, type ProviderId } from "./provider-config.js";
+import { PROVIDER_IDS, isProviderId, type ProviderId } from "../provider/config.js";
 import type { SlashCommand } from "./types.js";
 
 export const slashCommands: SlashCommand[] = [

@@ -1,7 +1,7 @@
 /** Renders the blocks `parseBlocks` finds: code, bullets, headings, tables, and paragraphs with inline bold and code. */
 import React from "react";
 import { Box, Text } from "ink";
-import { parseBlocks } from "../format/markdown.js";
+import { parseBlocks } from "../../format/markdown.js";
 import { colors } from "../theme.js";
 
 interface MarkdownProps {

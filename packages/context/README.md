@@ -27,7 +27,7 @@ const block = await gatherContext({ workspaceRoot, userMessage, signal });   // 
 
 The three file-based providers share one resolution of the message's file mentions per turn (`resolveRequestMentions`). Each provider file also holds its formatter.
 
-To add one, implement `ContextProvider` (`id`, optional `applies`, `gather` returning `Result<ContextFragment[]>`) in `src/providers/<name>.ts`, export it from `src/index.ts`, and register it in `apps/cli/src/bootstrap.ts`.
+To add one, implement `ContextProvider` (`id`, optional `applies`, `gather` returning `Result<ContextFragment[]>`) in `src/providers/<name>.ts`, export it from `src/index.ts`, and register it in `apps/cli/src/runtime/bootstrap.ts`.
 
 ## Other modules
 
