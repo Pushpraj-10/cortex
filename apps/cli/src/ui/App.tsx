@@ -15,7 +15,8 @@ import { summarizeToolCall } from "../format/tool-calls.js";
 import { useChat } from "./hooks/useChat.js";
 import { useInputHistory } from "./hooks/useInputHistory.js";
 import { useProviderSetup } from "./hooks/useProviderSetup.js";
-import { useTextInput } from "./hooks/useTextInput.js";
+import { editFor, useHomeEnd, type EdgeKey } from "./hooks/keys.js";
+import { continueLine, moveToLineEnd, moveToLineStart, moveVertical, normalizePaste, useTextInput } from "./hooks/useTextInput.js";
 import { useAltScreen, useTerminalSize } from "./hooks/terminal.js";
 import { slashMenuRows, transcriptRows } from "./layout.js";
 import type { PermissionBridge } from "../runtime/permission-bridge.js";
@@ -208,31 +209,33 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
       }
 
       if (key.return) {
-        if (key.shift || key.meta) input.insert("\n");
+        if (key.shift || key.meta) {
+          input.insert("\n");
+          return;
+        }
+        // A backslash before the cursor makes enter a newline instead of a send (for terminals that cannot tell shift+enter apart).
+        const continued = setup.stage === "field" ? undefined : continueLine({ value: input.value, cursor: input.cursorOffset });
+        if (continued) input.set(continued.value, continued.cursor);
         else submit();
         return;
       }
 
       if (key.escape) return;
 
-      if (key.backspace || key.delete) {
-        input.deleteBackward();
+      // Backspace, word and line movement and deletion: the keymap is in hooks/keys.ts.
+      const edit = editFor(typed, key);
+      if (edit === "ignore") return;
+      if (edit) {
+        input.apply(edit);
         return;
       }
-      if (key.upArrow) {
-        input.set(history.up(input.value));
-        return;
-      }
-      if (key.downArrow) {
-        input.set(history.down());
-        return;
-      }
-      if (key.leftArrow) {
-        input.moveLeft();
-        return;
-      }
-      if (key.rightArrow) {
-        input.moveRight();
+
+      // Up and down move between the lines of a multi-line entry first, and only past its first or last line recall history.
+      if (key.upArrow || key.downArrow) {
+        const moved = moveVertical({ value: input.value, cursor: input.cursorOffset }, key.upArrow ? -1 : 1);
+        if (moved) input.set(moved.value, moved.cursor);
+        else if (key.upArrow) input.set(history.up(input.value));
+        else input.set(history.down());
         return;
       }
 
@@ -242,10 +245,15 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
         return;
       }
 
-      if (typed) input.insert(typed);
+      // Text that arrives in one piece is a paste: line breaks come as \r, and an API key must not keep its trailing one.
+      if (typed) input.insert(typed.length > 1 ? normalizePaste(typed, { singleLine: setup.stage === "field" }) : typed);
     },
     { isActive: process.stdin.isTTY === true },
   );
+
+  // Home and End: Ink's useInput does not report them. Same moments as typing: not during an approval, a turn or the provider picker.
+  const typingAllowed = process.stdin.isTTY === true && !chat.pendingPermission && !chat.isThinking && setup.stage !== "select";
+  useHomeEnd((edge: EdgeKey) => input.apply(edge === "home" ? moveToLineStart : moveToLineEnd), typingAllowed);
 
   const request = chat.pendingPermission;
   // How much of a diff the approval prompt may show: up to 12 lines, fewer on a short terminal so the transcript keeps its rows.
