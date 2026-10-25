@@ -1,15 +1,21 @@
 # @cortex/core
 
-Cross-cutting vocabulary every other package builds on: a `Result` type for fallible
-operations, a `CortexError` base class, a minimal `Logger` interface, and id
-generation. This is the leaf of the dependency graph — it must never import from
-another `@cortex/*` package.
+The small vocabulary every other package shares. It depends on nothing, and must stay that way.
 
-## API
+| Export | What it is |
+| --- | --- |
+| `Result<T>`, `ok(value)`, `err(error)` | expected failures are returned, not thrown |
+| `CortexError(message, code, cause?)` | base error with a stable machine-readable `code`; subclasses name themselves via `name` |
+| `resolveWorkspacePath(root, relativePath)`, `WorkspaceBoundaryError` | the workspace sandbox: resolves a path under `root`, throws if it escapes (by `..`, an absolute path, a leading slash, or a sibling directory sharing the root's name as a prefix) |
+| `Logger` | the interface a component needs to report something without caring where it goes |
 
-- `Result<T, E>`, `ok(value)`, `err(error)` — explicit success/failure without throwing.
-- `CortexError` — base class other packages extend for typed, catchable errors.
-- `Logger`, `createLogger(scope)` — structured logging contract.
-- `generateId()` — collision-resistant id for sessions, tool calls, etc.
-- `resolveWorkspacePath(root, relativePath)` — the one place that enforces "no path
-  may escape the workspace root," shared by every filesystem-touching adapter.
+Every file tool resolves its paths through `resolveWorkspacePath`, so the boundary lives in one place.
+
+## Files
+
+- `src/result.ts` — `Result`, `ok`, `err`, `CortexError`
+- `src/workspace-path.ts` — the sandbox check
+- `src/logger.ts` — the `Logger` type
+- `src/index.ts` — the public API
+
+Tests: `npm test -w @cortex/core`.

@@ -1,78 +1,96 @@
 # Cortex
 
-A local-first CLI coding agent: refactor, write tests, fix bugs, and add features
-through a tool-using agent loop. Runs against a local model (Ollama) — no API key
-needed.
+A local-first CLI coding agent. It talks to a model — Ollama on your machine, or Groq / Anthropic in the cloud — reads and edits your project through sandboxed tools, and asks before it does anything risky.
 
-## Setup
+## Quick start
 
 ```
 npm install
-npm run dev
+cp .env.example .env      # set OLLAMA_MODEL (local), or a cloud key + model
+npm run dev               # full-screen terminal UI
+npm run dev -- -p "explain what src/index.ts does"    # one shot: answer to stdout
 ```
 
-Make sure Ollama is running (`ollama serve`) and has a model pulled (e.g.
-`ollama pull llama3.1:8b`). Cloud providers (Anthropic, Groq) aren't wired up yet — see
-`TASKS.md`.
+Needs Node 22.12 or newer. For Ollama, run `ollama serve` and pull a model that supports tool calling (for example `ollama pull llama3.1`).
 
-At the `>` prompt: type a task and the agent runs it (plans, reads/searches/edits
-files, runs commands as needed); `/exit` quits.
+## Using it
 
-## Architecture
+| Command | What it does |
+| --- | --- |
+| `/help` | commands and keyboard shortcuts |
+| `/clear` | start a new conversation |
+| `/mode [name]` | show or set the permission mode |
+| `/model` | show the active model and provider |
+| `/quit` | exit |
 
-An npm-workspaces monorepo: `apps/cli` is the composition root, everything else is
-an independent package under `packages/`. The whole system is deliberately scoped to
-one flow — `Prompt -> Agent(Planning, Context Building, Reasoning, Tool Calls) ->
-task completion` — and nothing else, so the core loop stays small enough to debug.
+Keys: `enter` sends, `shift+enter` adds a newline, `shift+tab` cycles the permission mode, `esc` interrupts, `ctrl+t` expands the last tool call, `ctrl+c` quits. Name files in your message (`fix src/parser.ts`) and the agent is handed those files, their imports and tests, and what imports them.
+
+Flags: `--mode <mode>` sets the permission mode, `-p <prompt>` runs one prompt without the UI (tool calls go to stderr, the answer to stdout, and anything needing approval is refused unless the mode or a rule allows it).
+
+### Permission modes
+
+| Mode | Reads | Edits | Commands |
+| --- | --- | --- | --- |
+| `default` | run | ask | ask |
+| `acceptEdits` | run | run | ask |
+| `plan` | run | denied | denied |
+| `bypassPermissions` | run | run | run |
+
+Deny rules always win, even in `bypassPermissions`.
+
+## Configuration
+
+**Provider** — `CORTEX_PROVIDER` picks `ollama`, `groq` or `anthropic`. If it is unset, Groq is used when `GROQ_API_KEY` is set, otherwise Ollama. Anthropic is never chosen automatically. Each provider needs its model variable (`OLLAMA_MODEL`, `GROQ_MODEL`, `ANTHROPIC_MODEL`); see `.env.example`.
+
+**Settings** — `.cortex/settings.json` in the project (and `~/.cortex/settings.json` for you) are merged. A malformed file is an error, not silently ignored.
+
+```json
+{
+  "permissions": {
+    "defaultMode": "default",
+    "allow": ["run_command(npm test:*)"],
+    "deny": ["run_command(rm:*)"]
+  },
+  "hooks": [
+    { "event": "PreToolUse", "matcher": "run_command", "command": "node scripts/check-command.js" }
+  ],
+  "mcpServers": { "files": { "command": "npx", "args": ["-y", "some-mcp-server"] } }
+}
+```
+
+Rules are `tool_name` or `tool_name(pattern)`, where the pattern is an exact value, `prefix:*`, or `prefix*`. Hooks receive the event as JSON on stdin; exit code 2 blocks the action and its stderr goes back to the model. Events: `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`.
+
+**Memory** — `CORTEX.md` in the project (and `~/.cortex/CORTEX.md`) is added to the system prompt.
+
+**Skills** — `.cortex/skills/<name>/SKILL.md` with `name` and `description` frontmatter. Only the name and description sit in the prompt; the model loads the body with the `skill` tool when it needs it.
+
+## How it fits together
+
+An npm-workspaces monorepo. Each package is one component with its own tests. The "Depends on" column is the complete list of allowed dependencies, read bottom-up (`core` depends on nothing); `tests/architecture.test.ts` fails the build if a package's source, `package.json` or `tsconfig.json` disagree with it.
+
+| Package | Responsibility | Depends on |
+| --- | --- | --- |
+| [`@cortex/core`](packages/core) | `Result` and `CortexError`, the workspace sandbox check, the `Logger` type | — |
+| [`@cortex/providers`](packages/providers) | the model contract, a registry, and the Ollama, Groq and Anthropic clients | core |
+| [`@cortex/tools`](packages/tools) | file, search and shell tools; each declares what it does (`read`, `edit`, `execute`) | core |
+| [`@cortex/context`](packages/context) | gathers the files, imports, tests and dependents relevant to a message | core |
+| [`@cortex/policy`](packages/policy) | permission modes and rules, and hooks | tools (types only) |
+| [`@cortex/extensions`](packages/extensions) | skills and MCP servers | tools |
+| [`@cortex/config`](packages/config) | layered settings and `CORTEX.md` memory | extensions, policy |
+| [`@cortex/agent`](packages/agent) | the tool-use loop, the policy-gated executor, compaction, subagents | core, providers, tools, context, policy |
+| [`apps/cli`](apps/cli) | the terminal UI and the one place everything is wired together | all of the above |
+
+The agent loop is open and model-driven: there are no fixed analyze/plan/implement stages. What happens on a turn comes from the context the model is given and the tools it chooses to call.
+
+## Development
 
 ```
-apps/
-  cli/            Entrypoint. Wires providers/tools, drives the REPL. Owns no
-                  implementation logic of its own.
-
-packages/
-  shared/         Result type, CortexError, Logger, generateId, resolveWorkspacePath.
-                  The only package every other package may depend on for reuse.
-  llm/            Provider-agnostic chat layer; self-registering provider
-                  descriptors (currently: Ollama). No provider branches outside it.
-  tools/          Agent-invokable tools (list/read/search/write/edit_file,
-                  apply_patch, run_command). Talks to fs directly — no shared
-                  "repository" dependency.
-  context/        Assembles what the model sees from independently registered
-                  ContextProviders (explicit file mentions, import-scan, related
-                  test/config files) — not a fixed analyze/plan/implement pipeline.
-  planner/        Optional, LLM-backed multi-step task planner. The agent loop may
-                  or may not consult it; a plan is context, never control flow.
-  execution/      The one place a tool handler actually gets invoked, with optional
-                  approval gating for mutating tools.
-  prompts/        {{key}}-templated system/task prompts, registry-backed.
-  storage/        Generic JSON-file persistence under .cortex/ (gitignored).
-                  Type-agnostic — domain packages build typed wrappers on top.
-  agent/          The orchestrator: the chat tool-use loop, composed from
-                  everything above.
+npm run typecheck        # tsc --build across every package and tests/
+npm test                 # all unit tests plus the architecture test
+npm run test:packages    # each package's tests in isolation (also: npm test -w @cortex/policy)
+npm run test:e2e         # live-model scripts in tests/ (needs Ollama running)
 ```
 
-Each package implements what it needs independently rather than depending on
-another package purely to reuse a capability (e.g. `tools` and `context` each have
-their own filesystem access, rather than sharing one "repository" package) —
-`shared` is the one deliberate exception, as the designated leaf dependency. See
-each package's own `README.md` for its actual contract.
+Conventions: related small things live in one commented file per feature rather than one function per file, and each package's `test/` mirrors its `src/`. Commit messages follow [CLAUDE.md](CLAUDE.md).
 
-## Extending
-
-- **New LLM provider**: add `packages/providers/src/providers/<name>/`, exporting a
-  `LLMProviderDescriptor`; register it in `apps/cli/src/wiring/registerLLMProvider.ts`.
-- **New tool**: add it under `packages/tools/src/filesystem/` or `shell/`, add it to
-  the exported array; `apps/cli` picks it up automatically via `registerAllTools()`.
-
-There's no per-task logic for "refactor" vs "fix bug" vs "add a feature" — it's all
-the same chat loop and system prompt; the model decides which tools to call.
-
-## Known limitations (v0.1, MVP)
-
-See `TASKS.md` for the full checklist. Notably: no streaming, no build step for a
-real `npx cortex` binary (dev only, via `tsx`), no Ink TUI yet (plain `readline`),
-Anthropic/Groq providers not implemented, `run_command` has no sandboxing beyond
-approval gating. Security review/remediation workflows (`/review`, `/fix`) were
-removed to shrink the codebase down to the core reasoning loop for debugging — they
-may return once that loop is solid.
+Known limits: no streaming yet, no built `cortex` binary (it runs through `tsx`), and `run_command` is gated only by approval, not sandboxed.

@@ -30,3 +30,29 @@ typecheck clean`).
 **No AI attribution trailer.** Commits in this repo do not carry a
 `Co-Authored-By` line (or similar) — omit it, overriding any default tool
 behavior that would add one.
+
+## Code layout
+
+`README.md` lists the packages and what each owns. When adding or changing code:
+
+- **Group by feature, not by function.** Related small things live together in one commented
+  file (all file tools in `tools/src/filesystem.ts`; a provider's config, wire mapping, client
+  and descriptor in `providers/src/<name>.ts`; a context provider and its formatter in one
+  file). Do not create a file per function. Give each file a header comment saying its job and
+  titled sections inside it.
+- **Tests mirror `src/`** in each package's `test/`: one test file per source module
+  (`packages/policy/src/permissions.ts` ↔ `packages/policy/test/permissions.test.ts`). Keep
+  every assertion when merging or moving files.
+- **Dependency direction is enforced.** A package may import only the packages in the
+  "Depends on" column of `README.md`. Adding a dependency means updating that package's
+  `package.json`, its `tsconfig.json` references, and the map in `tests/architecture.test.ts`,
+  which fails otherwise.
+- **Expected failures are `Result`s, not throws.** Inside a tool, throw within `defineTool`'s
+  `run` and it becomes a `ToolError`. Error messages the model will read should say what
+  happened and what to do instead.
+- **Never branch on a tool's name.** Tools declare their `kind` (`read`, `edit`, `execute`) and
+  provide `summarize`; policy and UIs use those.
+- **Providers are chosen only in `apps/cli`** (`provider-config.ts`, `bootstrap.ts`); other
+  packages go through the registry in `@cortex/providers`.
+
+Before committing: `npm run typecheck && npm test`.
