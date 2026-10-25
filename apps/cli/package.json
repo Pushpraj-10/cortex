@@ -13,7 +13,10 @@
     "@cortex/core": "*",
     "@cortex/providers": "*",
     "@cortex/tools": "*",
+    "@cortex/config": "*",
     "@cortex/context": "*",
+    "@cortex/extensions": "*",
+    "@cortex/policy": "*",
     "@cortex/agent": "*"
   },
   "devDependencies": {

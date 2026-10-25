@@ -18,8 +18,15 @@ export interface ToolCallEntry {
   detail: string;
 }
 
-/** One entry in the conversation, in the order it happened — a message or a tool call. */
-export type TimelineEntry = MessageEntry | ToolCallEntry;
+/** A one-off line from the app itself (help text, a mode change, "context compacted") — not from the model. */
+export interface NoticeEntry {
+  kind: "notice";
+  id: string;
+  text: string;
+}
+
+/** One entry in the conversation, in the order it happened. */
+export type TimelineEntry = MessageEntry | ToolCallEntry | NoticeEntry;
 
 export interface SlashCommand {
   name: string;

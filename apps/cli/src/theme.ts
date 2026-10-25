@@ -7,14 +7,10 @@
 export const colors = {
   /** Prompts, spinners, borders, highlights. */
   accent: "#D4A05F",
-  /** Secondary/meta text: token counts, hints, timestamps. */
+  /** Secondary/meta text: hints, notices, timestamps. */
   muted: "#6B7280",
   /** Errors. */
   error: "#F87171",
-  /** Success state and added diff lines. */
-  success: "#4ADE80",
-  /** Removed diff lines — distinct from `error` even though both are red-family. */
-  removed: "#B45454",
 } as const;
 
 export const tagline = "AI coding agent, right in your terminal.";
@@ -28,9 +24,9 @@ export const bannerArt = [
   " ╚═════╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝",
 ];
 
-export const placeholder = "Try 'fix the bug in...' or press ? for help";
+export const placeholder = "Try 'fix the bug in...' or type /help";
 
-export const statusHint = "? for shortcuts · esc to interrupt";
+export const statusHint = "/help for commands · esc to interrupt";
 
 /** Verbs the thinking indicator cycles through while a request is in flight. */
 export const thinkingVerbs = ["Thinking", "Pondering", "Working", "Reasoning", "Mulling"];

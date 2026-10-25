@@ -1,30 +1,11 @@
 import React from "react";
 import { Box, Text } from "ink";
+import { locateCursor } from "../text-edit.js";
 import { colors, maxInputBoxLines, placeholder } from "../theme.js";
 
 interface InputBoxProps {
   value: string;
   cursorOffset: number;
-}
-
-interface CursorLocation {
-  line: number;
-  col: number;
-}
-
-/** Maps a flat string offset to a (line, column) position, accounting for \n boundaries. */
-function locateCursor(value: string, offset: number): CursorLocation {
-  const lines = value.split("\n");
-  let remaining = offset;
-
-  for (let i = 0; i < lines.length; i++) {
-    const lineLength = lines[i]?.length ?? 0;
-    if (remaining <= lineLength) return { line: i, col: remaining };
-    remaining -= lineLength + 1; // +1 for the newline consumed between lines
-  }
-
-  const lastLine = lines.length - 1;
-  return { line: lastLine, col: lines[lastLine]?.length ?? 0 };
 }
 
 export function InputBox({ value, cursorOffset }: InputBoxProps) {

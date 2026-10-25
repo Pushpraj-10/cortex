@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseBlocks } from "../../src/components/Markdown.js";
+import { parseBlocks } from "../../src/format/markdown.js";
 
 describe("parseBlocks", () => {
   it("keeps a heading separate from a following paragraph in the same blank-line group", () => {
