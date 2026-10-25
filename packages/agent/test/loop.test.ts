@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { ok, err, CortexError, type Result } from "@cortex/core";
 import type { ChatMessage, LLMProvider } from "@cortex/providers";
-import { runToolLoop } from "../../src/core/tool-loop.js";
-import type { Executor } from "../../src/types.js";
+import { LLM_ERROR_PREFIX, runToolLoop } from "../src/loop.js";
+import type { Executor } from "../src/types.js";
 
 function llmReturning(...responses: Result<ChatMessage>[]): LLMProvider {
   const chat = vi.fn();
@@ -178,5 +178,62 @@ describe("runToolLoop", () => {
     await collect(runToolLoop(history, { llm, executor, tools: [] }));
 
     expect(chat).toHaveBeenCalledWith(expect.objectContaining({ messages: history }));
+  });
+});
+
+describe("runToolLoop: output size and compaction", () => {
+  it("truncates an oversized tool result in history but yields the full output to the caller", async () => {
+    const huge = "x".repeat(40_000);
+    const llm = llmReturning(
+      ok({ role: "assistant", content: "", toolCalls: [{ toolName: "big_tool", args: {} }] }),
+      ok({ role: "assistant", content: "done" }),
+    );
+    const executor: Executor = { execute: vi.fn().mockResolvedValue(ok(huge)) };
+    const history: ChatMessage[] = [{ role: "user", content: "go" }];
+
+    const events = await collect(runToolLoop(history, { llm, executor, tools: [] }));
+
+    expect(events[1]).toEqual({ type: "toolResult", toolName: "big_tool", output: huge });
+    const toolMessage = history.find((m) => m.role === "tool")!;
+    expect(toolMessage.content.length).toBeLessThan(31_000);
+    expect(toolMessage.content).toContain("[output truncated at 30000 characters]");
+  });
+
+  it("compacts an over-budget history before asking the model, and says so", async () => {
+    const big = "x".repeat(4000);
+    // the first model call is the summary request, the second is the real turn
+    const llm = llmReturning(ok({ role: "assistant", content: "SUMMARY" }), ok({ role: "assistant", content: "final" }));
+    const history: ChatMessage[] = [
+      { role: "system", content: "sys" },
+      { role: "user", content: big },
+      { role: "assistant", content: big },
+      { role: "user", content: big },
+      { role: "assistant", content: "b" },
+      { role: "user", content: "c" },
+      { role: "assistant", content: "d" },
+      { role: "user", content: "e" },
+      { role: "assistant", content: "f" },
+      { role: "user", content: "question" },
+    ];
+    const executor: Executor = { execute: vi.fn() };
+
+    const events = await collect(runToolLoop(history, { llm, executor, tools: [], contextBudgetTokens: 500 }));
+
+    expect(events[0]).toMatchObject({ type: "compacted" });
+    expect(events.at(-1)).toEqual({ type: "message", content: "final" });
+    expect(history[0]).toEqual({ role: "system", content: "sys" });
+    expect(history[1]!.content).toContain("[Summary of earlier conversation]");
+  });
+});
+
+describe("LLM_ERROR_PREFIX", () => {
+  it("prefixes the message yielded when the model request fails", async () => {
+    const llm = llmReturning(err(new CortexError("network down", "TEST_NETWORK_DOWN")));
+    const executor: Executor = { execute: vi.fn() };
+
+    const events = await collect(runToolLoop([{ role: "user", content: "hi" }], { llm, executor, tools: [] }));
+
+    expect(events[0]).toEqual({ type: "message", content: `${LLM_ERROR_PREFIX}network down` });
+    expect(LLM_ERROR_PREFIX).toBe("LLM request failed: ");
   });
 });

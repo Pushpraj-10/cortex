@@ -9,6 +9,7 @@
     { "path": "../providers" },
     { "path": "../tools" },
     { "path": "../context" },
+    { "path": "../policy" },
   ],
   "include": ["src", "test"]
 }

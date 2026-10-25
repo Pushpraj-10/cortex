@@ -1,14 +1,11 @@
 /**
- * @cortex/agent — the chat + native-tool-calling loop that drives a coding session.
- * Wires @cortex/providers (the model), @cortex/tools (what it can do), and @cortex/prompts
- * (its system prompt) together; nothing here talks to a specific provider or tool.
+ * @cortex/agent — the chat + native-tool-calling loop that drives a coding session. It wires
+ * @cortex/providers (the model), @cortex/tools (what it can do), @cortex/context (what it is told)
+ * and @cortex/policy (what it may do); nothing here talks to a specific provider or tool.
  */
 
-// Shared types
-export type { AgentConfig, AgentEvent, AgentSession, Executor } from "./types.js";
-
-// Core session & loop
-export { createAgentSession } from "./core/agent-session.js";
-export { runToolLoop, type ToolLoopDeps } from "./core/tool-loop.js";
-export { createToolsExecutor } from "./core/tools-executor.js";
-export { toToolSpec } from "./core/to-tool-spec.js";
+export type { AgentConfig, AgentEvent, AgentPolicy, AgentSession, Executor } from "./types.js";
+export { createAgentSession } from "./session.js";
+export { createToolsExecutor } from "./executor.js";
+export { createTaskTool, TASK_TOOL_NAME } from "./subagent.js";
+export { LLM_ERROR_PREFIX } from "./loop.js";

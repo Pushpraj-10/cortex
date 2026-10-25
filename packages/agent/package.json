@@ -9,6 +9,7 @@
     "@cortex/core": "*",
     "@cortex/providers": "*",
     "@cortex/tools": "*",
-    "@cortex/context": "*"
+    "@cortex/context": "*",
+    "@cortex/policy": "*"
   }
 }

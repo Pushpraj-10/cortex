@@ -110,7 +110,7 @@ export function App({ session, cwd, model, provider }: AppProps) {
           setTimeline((prev) =>
             prev.map((entry) => (entry.kind === "toolCall" && entry.id === id ? { ...entry, detail } : entry)),
           );
-        } else {
+        } else if (event.type === "message") {
           if (userCancelledRef.current) continue;
           setTimeline((prev) => [
             ...prev,
