@@ -1,6 +1,6 @@
 import React from "react";
 import { describe, expect, it } from "vitest";
-import { MessageBubble, NoticeLine } from "../../../src/ui/components/Messages.js";
+import { MessageBubble, MessageList, NoticeLine } from "../../../src/ui/components/Messages.js";
 import { renderFrame } from "../support/render-frame.js";
 
 const error = (content: string) => ({ kind: "message" as const, id: "m", role: "assistant" as const, content, isError: true });
@@ -17,6 +17,47 @@ describe("MessageBubble: errors", () => {
     expect(rows.length).toBeGreaterThan(2);
     expect(rows[0]!.startsWith("✗ ")).toBe(true);
     for (const row of rows.slice(1)) expect(row.startsWith("  ")).toBe(true);
+  });
+});
+
+describe("MessageList: a transcript taller than its viewport", () => {
+  const conversation = (count: number) =>
+    Array.from({ length: count }, (_, i) => ({
+      kind: "message" as const,
+      id: `m${i}`,
+      role: (i % 2 === 0 ? "user" : "assistant") as "user" | "assistant",
+      content: `message number ${i}`,
+    }));
+  const draw = (count: number, height: number) =>
+    renderFrame(<MessageList cwd="D:\\proj" version="0" height={height} timeline={conversation(count)} expandedToolCallIds={new Set()} />, 60);
+
+  it("shows the newest messages, not the oldest, with the newest at the bottom", async () => {
+    const rows = (await draw(20, 10)).split("\n");
+    expect(rows.at(-1)).toBe("  message number 19"); // the blank margin row after it is trimmed from the frame
+    expect(rows.join("\n")).not.toContain("message number 0\n");
+  });
+
+  it("keeps every message on its own row, with the blank row between messages, and nothing drawn over them", async () => {
+    // Ten rows: five messages of two rows each (the last one's blank row is trimmed from the frame). Squeezed, it would
+    // show the start of the conversation with the rows overlapping, and the banner's last row under the first message.
+    expect((await draw(20, 10)).split("\n")).toEqual([
+      "  message number 15",
+      "",
+      "> message number 16",
+      "",
+      "  message number 17",
+      "",
+      "> message number 18",
+      "",
+      "  message number 19",
+    ]);
+  });
+
+  it("shows all of a short conversation, banner included, from the top", async () => {
+    const frame = await draw(2, 40);
+    expect(frame).toContain("v0");
+    expect(frame).toContain("> message number 0");
+    expect(frame).toContain("message number 1");
   });
 });
 

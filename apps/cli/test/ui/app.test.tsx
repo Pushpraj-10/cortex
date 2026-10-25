@@ -38,6 +38,21 @@ describe("App: typing and sending", () => {
   });
 });
 
+describe("App: a conversation longer than the screen", () => {
+  it("keeps showing the newest messages, and does not draw the top of the banner over the oldest one showing", async () => {
+    const a = await start({ rows: 24, columns: 80 });
+    for (let i = 0; i < 20; i += 1) {
+      await a.type(`m${i}`);
+      await a.press(KEY.enter);
+    }
+    const screen = a.screen();
+    expect(screen).toContain("> m19");
+    expect(screen).not.toMatch(/^> m0\s*$/m); // the oldest has scrolled off the top
+    expect(screen).not.toContain("Press esc to interrupt a running request."); // nor is a banner row overwritten by a message
+    expect(screen.split("\n")).toHaveLength(24);
+  });
+});
+
 describe("App: the terminal", () => {
   it("listens for the terminal being resized once, however long the conversation gets (Node warns past ten listeners)", async () => {
     const a = await start();

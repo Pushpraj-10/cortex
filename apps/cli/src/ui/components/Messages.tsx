@@ -81,12 +81,15 @@ interface MessageListProps {
  * `overflow="hidden"` clips it and `justifyContent="flex-end"` anchors the clip to the end, so the
  * newest content stays visible and older content scrolls off the top — a tail -f effect handled
  * entirely by Yoga's flex layout, no manual line-counting needed.
+ *
+ * The inner column must not shrink (`flexShrink={0}`). By default Yoga squeezes it, and everything in it, to fit the
+ * viewport: rows overlap, spacing disappears, and what is left on screen is the start of the conversation instead of its end.
  */
 export function MessageList({ cwd, version, height, timeline, expandedToolCallIds }: MessageListProps) {
   const { columns } = useTerminalSize();
   return (
     <Box height={height} overflow="hidden" flexDirection="column" justifyContent="flex-end">
-      <Box flexDirection="column">
+      <Box flexDirection="column" flexShrink={0}>
         <Banner cwd={cwd} version={version} />
         {timeline.map((entry) => {
           if (entry.kind === "message") return <MessageBubble key={entry.id} message={entry} />;
