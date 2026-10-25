@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ProviderRequestError, postJson, toFunctionTools } from "../src/wire.js";
+import { ProviderRequestError, postJson } from "../src/wire.js";
 
 describe("ProviderRequestError", () => {
   it("derives its code from the provider name and keeps the cause", () => {
@@ -8,18 +8,6 @@ describe("ProviderRequestError", () => {
     expect(error.code).toBe("LLM_OLLAMA_REQUEST_FAILED");
     expect(error.provider).toBe("Ollama");
     expect(error.cause).toBe(cause);
-  });
-});
-
-describe("toFunctionTools", () => {
-  it("maps ToolSpec[] to the function-calling schema", () => {
-    expect(toFunctionTools([{ name: "read_file", description: "Reads a file", parametersSchema: { type: "object" } }])).toEqual([
-      { type: "function", function: { name: "read_file", description: "Reads a file", parameters: { type: "object" } } },
-    ]);
-  });
-
-  it("maps an empty list to an empty list", () => {
-    expect(toFunctionTools([])).toEqual([]);
   });
 });
 

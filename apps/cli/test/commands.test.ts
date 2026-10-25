@@ -7,6 +7,8 @@ function host(overrides: Partial<CommandHost> = {}): CommandHost {
     model: "llama3.1",
     provider: "ollama",
     setMode: vi.fn(),
+    openProviderSetup: vi.fn(),
+    removeProvider: vi.fn(),
     clear: vi.fn(),
     quit: vi.fn(),
     notify: vi.fn(),
@@ -69,6 +71,42 @@ describe("runSlashCommand", () => {
     const h = host();
     expect(runSlashCommand("/frobnicate now", h)).toBe(true);
     expect(vi.mocked(h.notify).mock.calls[0]![0]).toContain("Unknown command /frobnicate");
+  });
+
+  it("/provider with no argument opens the picker", () => {
+    const h = host();
+    expect(runSlashCommand("/provider", h)).toBe(true);
+    expect(h.openProviderSetup).toHaveBeenCalledWith();
+  });
+
+  it("/provider <name> goes straight to that provider's setup", () => {
+    const h = host();
+    runSlashCommand("/provider google", h);
+    expect(h.openProviderSetup).toHaveBeenCalledWith("google");
+  });
+
+  it("/provider <unknown> reports the valid providers and starts nothing", () => {
+    const h = host();
+    runSlashCommand("/provider groq", h);
+    expect(h.openProviderSetup).not.toHaveBeenCalled();
+    expect(vi.mocked(h.notify).mock.calls[0]![0]).toContain('Unknown provider "groq"');
+    expect(vi.mocked(h.notify).mock.calls[0]![0]).toContain("google");
+  });
+
+  it("/provider remove <name> forgets that provider's saved settings", () => {
+    const h = host();
+    runSlashCommand("/provider remove anthropic", h);
+    expect(h.removeProvider).toHaveBeenCalledWith("anthropic");
+    expect(h.openProviderSetup).not.toHaveBeenCalled();
+  });
+
+  it("/provider remove without a valid name shows the usage", () => {
+    const h = host();
+    runSlashCommand("/provider remove", h);
+    runSlashCommand("/provider remove nonsense", h);
+    expect(h.removeProvider).not.toHaveBeenCalled();
+    expect(vi.mocked(h.notify).mock.calls[0]![0]).toContain("Usage: /provider remove");
+    expect(vi.mocked(h.notify).mock.calls).toHaveLength(2);
   });
 
   it("is case-insensitive and tolerant of surrounding whitespace", () => {

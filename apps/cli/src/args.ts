@@ -17,7 +17,7 @@ Options:
   -p <prompt>     Run one prompt non-interactively and print the answer
   -h, --help      Show this help
 
-Provider: set CORTEX_PROVIDER (ollama | groq | anthropic), or let GROQ_API_KEY / OLLAMA_MODEL decide.`;
+Provider: set CORTEX_PROVIDER (ollama | google | anthropic). The default is ollama, which needs OLLAMA_MODEL.`;
 
 export class UsageError extends CortexError {
   constructor(message: string) {

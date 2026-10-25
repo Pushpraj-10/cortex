@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { saveProviderCredentials } from "@cortex/config";
 import { getTool } from "@cortex/tools";
 import { bootstrap } from "../src/bootstrap.js";
 
@@ -27,8 +28,7 @@ describe("bootstrap", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.provider).toBe("ollama");
-    expect(result.value.model).toBe("llama3.1");
+    expect(result.value.providers.active()).toEqual({ provider: "ollama", model: "llama3.1" });
     expect(typeof result.value.initialSession.chat).toBe("function");
     expect(typeof result.value.newSession().chat).toBe("function");
     expect(getTool("task").kind).toBe("read");
@@ -75,9 +75,53 @@ describe("bootstrap", () => {
     await expect(interactive.value.policy.askPermission("run_command", {})).resolves.toBe(true);
   });
 
-  it("fails with the provider's configuration error when nothing is configured", async () => {
-    const result = await bootstrap({ cwd, interactive: true, env: {}, home });
+  it("fails a non-interactive run with the provider's configuration error when nothing is configured", async () => {
+    const result = await bootstrap({ cwd, interactive: false, env: {}, home });
     expect(!result.ok && result.error.code).toBe("CLI_MISSING_OLLAMA_MODEL");
+  });
+
+  it("still starts the UI when nothing is configured, so the user can fix it with /provider", async () => {
+    const result = await bootstrap({ cwd, interactive: true, env: {}, home });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.providers.active()).toBeNull();
+    const reply = await result.value.providers.llm.chat({ messages: [{ role: "user", content: "hi" }] });
+    expect(!reply.ok && reply.error.code).toBe("CLI_NO_PROVIDER");
+  });
+
+  it("still fails in the UI when CORTEX_PROVIDER names no provider, which /provider cannot fix", async () => {
+    const result = await bootstrap({ cwd, interactive: true, env: { CORTEX_PROVIDER: "openai" }, home });
+    expect(!result.ok && result.error.code).toBe("CLI_INVALID_PROVIDER");
+  });
+
+  it("uses the provider saved from the UI when the environment configures nothing", async () => {
+    await saveProviderCredentials("google", { apiKey: "saved-key", model: "gemini-test" }, { home, activate: true });
+
+    const result = await bootstrap({ cwd, interactive: false, env: {}, home });
+
+    expect(result.ok && result.value.providers.active()).toEqual({ provider: "google", model: "gemini-test" });
+  });
+
+  it("lets the environment override what was saved, and treats blank environment values as unset", async () => {
+    await saveProviderCredentials("google", { apiKey: "saved-key", model: "gemini-test" }, { home, activate: true });
+
+    const overridden = await bootstrap({ cwd, interactive: false, env: { CORTEX_PROVIDER: "ollama", OLLAMA_MODEL: "llama3.1" }, home });
+    expect(overridden.ok && overridden.value.providers.active()?.provider).toBe("ollama");
+
+    const blank = await bootstrap({ cwd, interactive: false, env: { CORTEX_PROVIDER: "", GOOGLE_API_KEY: "", GOOGLE_MODEL: "" }, home });
+    expect(blank.ok && blank.value.providers.active()).toEqual({ provider: "google", model: "gemini-test" });
+  });
+
+  it("fails with a bootstrap error, naming the file but not its contents, when the saved credentials are malformed", async () => {
+    await fs.mkdir(path.join(home, ".cortex"));
+    await fs.writeFile(path.join(home, ".cortex", "credentials.json"), '{ "providers": { "google": { "apiKey": "SECRET-VALUE" ');
+
+    const result = await bootstrap({ cwd, interactive: true, env, home });
+
+    expect(!result.ok && result.error.code).toBe("CLI_BOOTSTRAP_FAILED");
+    expect(!result.ok && result.error.message).toContain("credentials.json");
+    expect(!result.ok && result.error.message).not.toContain("SECRET-VALUE");
   });
 
   it("fails with a bootstrap error, naming the file, when settings.json is malformed", async () => {

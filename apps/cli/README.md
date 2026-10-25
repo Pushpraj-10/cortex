@@ -12,7 +12,7 @@ npm run dev -- -p "explain src/a.ts" # one shot: answer on stdout, tool calls on
 
 Configuration comes from the environment or a `.env` in the working directory; see the root `.env.example` and README. In `-p` runs nobody can approve a call, so anything that needs approval is refused (with a hint) unless `--mode` or an allow rule covers it. To use it as a command, `npm link` in this folder (`bin.cortex` runs `src/index.ts` through `tsx`).
 
-In the UI: `/help`, `/clear`, `/mode`, `/model`, `/quit`; `enter` sends, `shift+enter` newline, `shift+tab` cycles the permission mode, `esc` interrupts (a real `AbortSignal` down to the HTTP request), `ctrl+t` expands the last tool call, `ctrl+c` quits. When the agent needs approval a prompt takes over: `y`/`enter` allows, `n`/`esc` refuses.
+With nothing configured the UI still opens, and tells you to run `/provider` to enter an API key and model (see the root README for where they are saved). In the UI: `/help`, `/clear`, `/mode`, `/provider`, `/model`, `/quit`; `enter` sends, `shift+enter` newline, `shift+tab` cycles the permission mode, `esc` interrupts (a real `AbortSignal` down to the HTTP request), `ctrl+t` expands the last tool call, `ctrl+c` quits. When the agent needs approval a prompt takes over: `y`/`enter` allows, `n`/`esc` refuses.
 
 ## Structure
 
@@ -20,7 +20,9 @@ In the UI: `/help`, `/clear`, `/mode`, `/model`, `/quit`; `enter` sends, `shift+
 | --- | --- |
 | `index.ts` | entry: parse flags, load `.env`, bootstrap, then render the UI or run one shot |
 | `args.ts` · `env.ts` | command-line flags; `.env` loading (real environment variables win) |
-| `provider-config.ts` | picks the provider from the environment and resolves its config |
+| `provider-config.ts` | picks the provider and resolves its config from the environment, with saved settings layered underneath (real environment variables win; empty ones count as unset) |
+| `provider-manager.ts` | the running app's provider: a delegating client, what is saved, and `configure` / `remove` that save and switch without a restart; nothing it returns contains a key |
+| `provider-setup.ts` · `hooks/useProviderSetup.ts` | the `/provider` flow: the questions per provider and a pure state machine (empty answer keeps a saved value, required fields are enforced), and the hook that drives it |
 | `bootstrap.ts` | registers providers, tools and context providers; loads settings, memory, skills and MCP servers; builds the shared `AgentPolicy` and sessions |
 | `run-once.ts` | the `-p` path |
 | `commands.ts` | slash commands — pure logic over a `CommandHost` |
@@ -30,7 +32,7 @@ In the UI: `/help`, `/clear`, `/mode`, `/model`, `/quit`; `enter` sends, `shift+
 | `hooks/useTextInput.ts` · `text-edit.ts` | input state over pure editing functions |
 | `hooks/useInputHistory.ts` · `terminal.ts` · `animation.ts` | up/down recall; alt screen and size; spinner, verb and elapsed time |
 | `layout.ts` | the vertical layout math: rows left for the transcript |
-| `components/` | `Banner`, `InputBox`, `Messages` (messages, tool calls, notices, the scrolling viewport), `Markdown`, `PermissionPrompt`, `SlashCommandMenu`, `StatusLine`, `ThinkingIndicator` |
+| `components/` | `Banner`, `InputBox` (can mask a secret), `Messages` (messages, tool calls, notices, the scrolling viewport), `Markdown`, `PermissionPrompt`, `SetupPrompt`, `SlashCommandMenu` (also the provider picker), `StatusLine`, `ThinkingIndicator` |
 | `format/markdown.ts` · `format/tool-calls.ts` | markdown parsing; tool-call summaries (from each tool's own `summarize`), result detail, failure detection |
 | `theme.ts` | colors and copy — retheme here |
 

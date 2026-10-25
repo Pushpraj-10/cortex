@@ -1,9 +1,7 @@
 /**
- * Plumbing shared by the HTTP providers: one error type, one JSON POST helper, and the
- * function-calling tool schema that Ollama and Groq (OpenAI-compatible) both use.
+ * Plumbing shared by the HTTP providers: one error type and one JSON POST helper.
  */
 import { CortexError, err, ok, type Result } from "@cortex/core";
-import type { ToolSpec } from "./types.js";
 
 /** Any failure talking to a provider: network error, non-2xx status, or a malformed reply. */
 export class ProviderRequestError extends CortexError {
@@ -45,17 +43,4 @@ export async function postJson<T>(opts: PostJsonOptions): Promise<Result<T>> {
     return err(new ProviderRequestError(opts.provider, `${opts.provider} returned ${response.status}: ${await response.text()}`));
   }
   return ok((await response.json()) as T);
-}
-
-/** The OpenAI-style function-calling tool schema. */
-export interface FunctionToolSpec {
-  type: "function";
-  function: { name: string; description: string; parameters: Record<string, unknown> };
-}
-
-export function toFunctionTools(tools: ToolSpec[]): FunctionToolSpec[] {
-  return tools.map((tool) => ({
-    type: "function",
-    function: { name: tool.name, description: tool.description, parameters: tool.parametersSchema },
-  }));
 }

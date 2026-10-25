@@ -52,6 +52,10 @@ behavior that would add one.
   happened and what to do instead.
 - **Never branch on a tool's name.** Tools declare their `kind` (`read`, `edit`, `execute`) and
   provide `summarize`; policy and UIs use those.
+- **Secrets stay secret.** An API key is typed masked, saved only through `@cortex/config`'s
+  credentials (user-level, owner-only file — never the project), and never logged, echoed into the
+  transcript or input history, or included in an error or notice. A test should prove it for any
+  new code path that handles one.
 - **Providers are chosen only in `apps/cli`** (`provider-config.ts`, `bootstrap.ts`); other
   packages go through the registry in `@cortex/providers`.
 

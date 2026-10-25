@@ -25,7 +25,7 @@ if (!boot.ok) {
   console.error(`Cortex failed to start: ${boot.error.message}`);
   process.exit(1);
 }
-const { initialSession, newSession, policy, permissions, model, provider, close } = boot.value;
+const { initialSession, newSession, policy, permissions, providers, close } = boot.value;
 
 if (args.value.prompt !== undefined) {
   const exitCode = await runOnce(initialSession, args.value.prompt);
@@ -33,6 +33,6 @@ if (args.value.prompt !== undefined) {
   process.exit(exitCode);
 }
 
-const app = render(React.createElement(App, { initialSession, newSession, policy, permissions, cwd, model, provider }));
+const app = render(React.createElement(App, { initialSession, newSession, policy, permissions, cwd, providers }));
 await app.waitUntilExit();
 close();

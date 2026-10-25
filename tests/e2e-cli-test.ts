@@ -58,8 +58,8 @@ async function main() {
     await cleanup(workspaceRoot);
     process.exit(1);
   }
-  const { initialSession: session, model } = result.value;
-  log("STAGE 1 OK", { workspaceRoot, model });
+  const { initialSession: session, providers } = result.value;
+  log("STAGE 1 OK", { workspaceRoot, active: providers.active() });
 
   // ---- Stage 2: drive a real task through the real wiring -------------------------------
   const task =

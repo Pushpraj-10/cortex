@@ -21,10 +21,10 @@ const reply = await provider.chat({ messages, tools, signal });   // Result<Chat
 | File | Provider | Wire format notes |
 | --- | --- | --- |
 | `src/ollama.ts` | Ollama (local) | native `/api/chat`; tool-call arguments are objects |
-| `src/groq.ts` | Groq (cloud) | OpenAI-compatible; arguments are JSON strings; calls and results need an id |
+| `src/google.ts` | Google Gemini (cloud) | native `generateContent`; system prompt is `systemInstruction`; assistant role is `model`; calls and results are `functionCall` / `functionResponse` parts matched by tool name (no ids); results must be objects; schema keywords Gemini rejects are stripped |
 | `src/anthropic.ts` | Anthropic (cloud) | Messages API; system prompt is a top-level field; tool calls are content blocks; adjacent user turns are merged |
 
-`ChatMessage` carries no tool-call id, so Groq and Anthropic derive `call_<toolName>`. That is safe because the agent runs one tool call per turn; the Anthropic client also sends `disable_parallel_tool_use` and returns only the first `tool_use`. `src/wire.ts` holds what the HTTP providers share: `ProviderRequestError` (code `LLM_<PROVIDER>_REQUEST_FAILED`), `postJson`, and the function-tool schema.
+`ChatMessage` carries no tool-call id. Anthropic derives `call_<toolName>` (safe because the agent runs one tool call per turn) and also sends `disable_parallel_tool_use`; Google needs no ids. Both return only the first tool call. `src/wire.ts` holds what the HTTP providers share: `ProviderRequestError` (code `LLM_<PROVIDER>_REQUEST_FAILED`) and `postJson`.
 
 ## Adding a provider
 

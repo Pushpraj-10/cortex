@@ -1,7 +1,7 @@
 /**
  * The provider-agnostic contract: what a chat request and reply look like, what an
  * LLM provider is, and how a provider describes itself to the registry. Concrete
- * providers (Ollama, Groq, Anthropic) translate to and from their own wire formats;
+ * providers (Ollama, Google, Anthropic) translate to and from their own wire formats;
  * nothing outside this package ever sees those formats.
  */
 import type { Result } from "@cortex/core";

@@ -54,7 +54,7 @@ interface AnthropicResponse {
 /**
  * Our ChatMessage carries no tool-call id, so one is derived from the tool name. That is
  * safe because the agent runs a single tool call per turn, so the name alone pairs a
- * `tool_use` with its `tool_result` (the same trick the Groq mapping uses).
+ * `tool_use` with its `tool_result`.
  */
 function toolCallId(toolName: string): string {
   return `call_${toolName}`;

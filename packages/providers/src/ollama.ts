@@ -3,8 +3,8 @@
  * Ollama's native /api/chat takes tool-call arguments as objects and needs no call ids.
  */
 import { err, ok, type Result } from "@cortex/core";
-import type { ChatMessage, ChatRequest, LLMProvider, LLMProviderDescriptor, ToolCall } from "./types.js";
-import { ProviderRequestError, postJson, toFunctionTools, type FunctionToolSpec } from "./wire.js";
+import type { ChatMessage, ChatRequest, LLMProvider, LLMProviderDescriptor, ToolCall, ToolSpec } from "./types.js";
+import { ProviderRequestError, postJson } from "./wire.js";
 
 export interface OllamaConfig {
   /** Defaults to http://localhost:11434. */
@@ -15,6 +15,19 @@ export interface OllamaConfig {
 const DEFAULT_BASE_URL = "http://localhost:11434";
 
 // ---- wire format -----------------------------------------------------------------
+
+/** The function-calling tool schema Ollama's /api/chat takes. */
+export interface FunctionToolSpec {
+  type: "function";
+  function: { name: string; description: string; parameters: Record<string, unknown> };
+}
+
+export function toFunctionTools(tools: ToolSpec[]): FunctionToolSpec[] {
+  return tools.map((tool) => ({
+    type: "function",
+    function: { name: tool.name, description: tool.description, parameters: tool.parametersSchema },
+  }));
+}
 
 interface OllamaToolCall {
   function: { name: string; arguments: unknown };

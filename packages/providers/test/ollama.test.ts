@@ -4,6 +4,7 @@ import {
   createOllamaClient,
   fromOllamaToolCalls,
   ollamaProviderDescriptor,
+  toFunctionTools,
   toOllamaMessage,
 } from "../src/ollama.js";
 import { ProviderRequestError } from "../src/wire.js";
@@ -11,6 +12,18 @@ import { ProviderRequestError } from "../src/wire.js";
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status });
 }
+
+describe("toFunctionTools", () => {
+  it("maps ToolSpec[] to the function-calling schema", () => {
+    expect(toFunctionTools([{ name: "read_file", description: "Reads a file", parametersSchema: { type: "object" } }])).toEqual([
+      { type: "function", function: { name: "read_file", description: "Reads a file", parameters: { type: "object" } } },
+    ]);
+  });
+
+  it("maps an empty list to an empty list", () => {
+    expect(toFunctionTools([])).toEqual([]);
+  });
+});
 
 describe("toOllamaMessage", () => {
   it("maps role and content, dropping extra ChatMessage fields", () => {

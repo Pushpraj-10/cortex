@@ -1,17 +1,21 @@
 import React from "react";
 import { Box, Text } from "ink";
+import { maskValue } from "../provider-setup.js";
 import { locateCursor } from "../text-edit.js";
 import { colors, maxInputBoxLines, placeholder } from "../theme.js";
 
 interface InputBoxProps {
   value: string;
   cursorOffset: number;
+  /** Shows a dot per character instead of the text, for secrets. The value itself is untouched. */
+  mask?: boolean;
 }
 
-export function InputBox({ value, cursorOffset }: InputBoxProps) {
-  const isEmpty = value.length === 0;
-  const lines = isEmpty ? [""] : value.split("\n");
-  const { line: cursorLine, col: cursorCol } = locateCursor(value, cursorOffset);
+export function InputBox({ value, cursorOffset, mask = false }: InputBoxProps) {
+  const display = mask ? maskValue(value) : value;
+  const isEmpty = display.length === 0;
+  const lines = isEmpty ? [""] : display.split("\n");
+  const { line: cursorLine, col: cursorCol } = locateCursor(display, cursorOffset);
   const contentHeight = Math.min(lines.length, maxInputBoxLines);
 
   return (

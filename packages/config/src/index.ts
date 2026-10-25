@@ -5,3 +5,11 @@
 
 export { loadSettings, type Settings } from "./settings.js";
 export { loadMemory } from "./memory.js";
+export {
+  credentialsPath,
+  loadCredentials,
+  removeProviderCredentials,
+  saveProviderCredentials,
+  type Credentials,
+  type StoredProvider,
+} from "./credentials.js";

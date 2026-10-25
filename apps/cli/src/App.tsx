@@ -7,16 +7,19 @@ import { runSlashCommand, slashCommands, type CommandHost } from "./commands.js"
 import { InputBox } from "./components/InputBox.js";
 import { MessageList } from "./components/Messages.js";
 import { PERMISSION_PROMPT_ROWS, PermissionPrompt } from "./components/PermissionPrompt.js";
+import { SETUP_PROMPT_ROWS, SetupPrompt } from "./components/SetupPrompt.js";
 import { SlashCommandMenu } from "./components/SlashCommandMenu.js";
 import { StatusLine } from "./components/StatusLine.js";
 import { ThinkingIndicator } from "./components/ThinkingIndicator.js";
 import { summarizeToolCall } from "./format/tool-calls.js";
 import { useChat } from "./hooks/useChat.js";
 import { useInputHistory } from "./hooks/useInputHistory.js";
+import { useProviderSetup } from "./hooks/useProviderSetup.js";
 import { useTextInput } from "./hooks/useTextInput.js";
 import { useAltScreen, useTerminalSize } from "./hooks/terminal.js";
 import { slashMenuRows, transcriptRows } from "./layout.js";
 import type { PermissionBridge } from "./permission-bridge.js";
+import type { ProviderManager } from "./provider-manager.js";
 import type { SlashCommand } from "./types.js";
 
 export interface AppProps {
@@ -27,11 +30,11 @@ export interface AppProps {
   policy: AgentPolicy;
   permissions: PermissionBridge;
   cwd: string;
-  model: string;
-  provider: string;
+  /** The active provider, its saved settings, and how to change them (the /provider command). */
+  providers: ProviderManager;
 }
 
-export function App({ initialSession, newSession, policy, permissions, cwd, model, provider }: AppProps) {
+export function App({ initialSession, newSession, policy, permissions, cwd, providers }: AppProps) {
   useAltScreen();
   const { exit } = useApp();
   const { rows } = useTerminalSize();
@@ -43,8 +46,12 @@ export function App({ initialSession, newSession, policy, permissions, cwd, mode
   const [submitted, setSubmitted] = useState<string[]>([]);
   const history = useInputHistory(submitted);
   const [slashIndex, setSlashIndex] = useState(0);
+  const [active, setActive] = useState(providers.active());
+  const setup = useProviderSetup(providers, chat.notify, setActive);
 
-  const slashMenuOpen = input.value.startsWith("/") && !input.value.includes("\n") && !input.value.slice(1).includes(" ");
+  // While /provider is asking for an answer, what is typed is that answer, not a message or a command.
+  const slashMenuOpen =
+    setup.stage === "idle" && input.value.startsWith("/") && !input.value.includes("\n") && !input.value.slice(1).includes(" ");
   const filteredCommands = useMemo(() => {
     if (!slashMenuOpen) return [];
     const query = input.value.slice(1).toLowerCase();
@@ -55,6 +62,12 @@ export function App({ initialSession, newSession, policy, permissions, cwd, mode
   useEffect(() => {
     setSlashIndex(0);
   }, [input.value]);
+
+  useEffect(() => {
+    if (!providers.active()) chat.notify("No model provider is configured yet. Type /provider to set one up (an API key, or a local Ollama model).");
+    // once, at startup
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function setMode(next: PermissionMode) {
     policy.mode = next;
@@ -67,9 +80,11 @@ export function App({ initialSession, newSession, policy, permissions, cwd, mode
 
   const commandHost: CommandHost = {
     mode,
-    model,
-    provider,
+    model: active?.model ?? "none",
+    provider: active?.provider ?? "not configured — type /provider",
     setMode,
+    openProviderSetup: setup.begin,
+    removeProvider: setup.remove,
     clear: () => {
       chat.reset();
       setSession(newSession());
@@ -112,6 +127,30 @@ export function App({ initialSession, newSession, policy, permissions, cwd, mode
         if (key.return || answer === "y") chat.answerPermission(true);
         else if (key.escape || answer === "n") chat.answerPermission(false);
         return;
+      }
+
+      // /provider: the picker, then the questions. Answers bypass submit(), so they never reach the
+      // transcript or the input history.
+      if (setup.stage === "select") {
+        if (key.upArrow) setup.move(-1);
+        else if (key.downArrow) setup.move(1);
+        else if (key.return || key.tab) setup.choose();
+        else if (key.escape) setup.cancel();
+        return;
+      }
+      if (setup.stage === "field") {
+        if (key.return) {
+          const answer = input.value;
+          input.set("", 0);
+          setup.submit(answer);
+          return;
+        }
+        if (key.escape) {
+          input.set("", 0);
+          setup.cancel();
+          return;
+        }
+        if (key.upArrow || key.downArrow || key.tab) return;
       }
 
       if (key.tab && key.shift) {
@@ -179,12 +218,13 @@ export function App({ initialSession, newSession, policy, permissions, cwd, mode
 
   const request = chat.pendingPermission;
   const showThinking = chat.isThinking && !request;
+  const pickerOpen = setup.stage === "select";
   const listHeight = transcriptRows({
     rows,
     inputValue: input.value,
     thinking: showThinking,
-    slashMenuRows: slashMenuRows(slashMenuOpen, filteredCommands.length),
-    promptRows: request ? PERMISSION_PROMPT_ROWS : 0,
+    slashMenuRows: slashMenuRows(slashMenuOpen || pickerOpen, pickerOpen ? setup.menu.length : filteredCommands.length),
+    promptRows: request ? PERMISSION_PROMPT_ROWS : setup.prompt ? SETUP_PROMPT_ROWS : 0,
   });
 
   return (
@@ -192,9 +232,11 @@ export function App({ initialSession, newSession, policy, permissions, cwd, mode
       <MessageList cwd={cwd} height={listHeight} timeline={chat.timeline} expandedToolCallIds={chat.expandedToolCallIds} />
       {showThinking && <ThinkingIndicator active />}
       {request && <PermissionPrompt summary={summarizeToolCall(request.toolName, request.args)} />}
+      {pickerOpen && <SlashCommandMenu commands={setup.menu} selectedIndex={setup.selectedIndex} prefix="" />}
+      {setup.prompt && <SetupPrompt title={setup.prompt.title} label={setup.prompt.label} hint={setup.prompt.hint} error={setup.prompt.error} />}
       {slashMenuOpen && <SlashCommandMenu commands={filteredCommands} selectedIndex={clampedSlashIndex} />}
-      <InputBox value={input.value} cursorOffset={input.cursorOffset} />
-      <StatusLine model={`${model} (${provider})`} mode={mode} cwd={cwd} />
+      <InputBox value={input.value} cursorOffset={input.cursorOffset} mask={setup.prompt?.secret === true} />
+      <StatusLine model={active ? `${active.model} (${active.provider})` : "no provider"} mode={mode} cwd={cwd} />
     </Box>
   );
 }

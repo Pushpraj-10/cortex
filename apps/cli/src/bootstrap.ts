@@ -1,7 +1,7 @@
 /**
  * The composition root: the one place that knows about every package and wires them together.
  * It picks the LLM provider, registers providers, tools and context providers, loads settings,
- * memory, skills and MCP servers, builds the approval policy, and hands back sessions.
+ * memory, skills, saved provider settings and MCP servers, builds the approval policy, and hands back sessions.
  * Everything else in the CLI talks to the agent through what this returns.
  */
 import {
@@ -11,7 +11,7 @@ import {
   type AgentPolicy,
   type AgentSession,
 } from "@cortex/agent";
-import { loadMemory, loadSettings } from "@cortex/config";
+import { loadCredentials, loadMemory, loadSettings } from "@cortex/config";
 import {
   dependentsProvider,
   mentionedFilesProvider,
@@ -24,20 +24,20 @@ import { connectMcpServer, createSkillTool, loadSkills, renderSkillIndex, type M
 import type { PermissionMode } from "@cortex/policy";
 import {
   anthropicProviderDescriptor,
-  getLlmProvider,
-  groqProviderDescriptor,
+  googleProviderDescriptor,
   ollamaProviderDescriptor,
   registerLlmProvider,
 } from "@cortex/providers";
 import { builtinTools, registerTool } from "@cortex/tools";
 import { createPermissionBridge, type PermissionBridge } from "./permission-bridge.js";
-import { selectProvider, type ProviderId } from "./provider-config.js";
+import { credentialsToEnv, layerEnv, selectProvider } from "./provider-config.js";
+import { createProviderManager, type ProviderManager } from "./provider-manager.js";
 
 export interface BootOptions {
   cwd: string;
   /** From `--mode`; overrides the `defaultMode` in settings. */
   mode?: PermissionMode;
-  /** False for `-p` runs, where no one can answer an approval prompt. */
+  /** False for `-p` runs, where no one can answer an approval prompt or set up a provider. */
   interactive: boolean;
   /** Defaults to process.env. */
   env?: NodeJS.ProcessEnv;
@@ -53,8 +53,8 @@ export interface Boot {
   policy: AgentPolicy;
   /** How the agent asks the UI for approval. */
   permissions: PermissionBridge;
-  model: string;
-  provider: ProviderId;
+  /** The active provider and its saved settings; the UI's /provider command changes them. */
+  providers: ProviderManager;
   /** Stops MCP servers. */
   close(): void;
 }
@@ -71,21 +71,27 @@ async function refuseNonInteractively(toolName: string): Promise<boolean> {
 export async function bootstrap(options: BootOptions): Promise<Result<Boot>> {
   const { cwd } = options;
 
-  const choice = selectProvider(options.env);
-  if (!choice.ok) return choice;
-
   let settings: Awaited<ReturnType<typeof loadSettings>>;
   let memory: string;
   let skills: Awaited<ReturnType<typeof loadSkills>>;
+  let credentials: Awaited<ReturnType<typeof loadCredentials>>;
   try {
     settings = await loadSettings(cwd, options.home);
     memory = await loadMemory(cwd, options.home);
     skills = await loadSkills(cwd, options.home);
+    credentials = await loadCredentials(options.home);
   } catch (error) {
     return err(new CortexError(error instanceof Error ? error.message : String(error), "CLI_BOOTSTRAP_FAILED", error));
   }
 
-  for (const descriptor of [ollamaProviderDescriptor, groqProviderDescriptor, anthropicProviderDescriptor]) {
+  // Saved provider settings sit under the real environment, which wins when both are set.
+  const realEnv = options.env ?? process.env;
+  const choice = selectProvider(layerEnv(credentialsToEnv(credentials), realEnv));
+  // Nothing configured yet is not fatal in the UI — the user fixes it with /provider. A non-interactive run,
+  // or a CORTEX_PROVIDER that names no provider, cannot be fixed from here and still fails.
+  if (!choice.ok && !(options.interactive && choice.error.code.startsWith("CLI_MISSING_"))) return choice;
+
+  for (const descriptor of [ollamaProviderDescriptor, googleProviderDescriptor, anthropicProviderDescriptor]) {
     registerLlmProvider(descriptor);
   }
   for (const tool of builtinTools) registerTool(tool);
@@ -112,7 +118,10 @@ export async function bootstrap(options: BootOptions): Promise<Result<Boot>> {
     askPermission: options.interactive ? permissions.ask : refuseNonInteractively,
   };
 
-  const llm = getLlmProvider(choice.value.id).createClient(choice.value.config);
+  // Everything below talks to the manager's client, which delegates to whichever provider is active,
+  // so /provider can switch providers without rebuilding sessions or the task tool.
+  const providers = createProviderManager({ env: realEnv, home: options.home, initial: choice.ok ? choice.value : undefined });
+  const llm = providers.llm;
   const executor = createToolsExecutor(cwd, policy);
   registerTool(createTaskTool({ llm, executor, workspaceRoot: cwd }));
   if (skills.length > 0) registerTool(createSkillTool(skills));
@@ -133,8 +142,7 @@ export async function bootstrap(options: BootOptions): Promise<Result<Boot>> {
     newSession,
     policy,
     permissions,
-    model: choice.value.model,
-    provider: choice.value.id,
+    providers,
     close: () => connections.forEach((connection) => connection.close()),
   });
 }

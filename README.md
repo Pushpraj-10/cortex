@@ -1,6 +1,6 @@
 # Cortex
 
-A local-first CLI coding agent. It talks to a model — Ollama on your machine, or Groq / Anthropic in the cloud — reads and edits your project through sandboxed tools, and asks before it does anything risky.
+A local-first CLI coding agent. It talks to a model — Ollama on your machine, or Google Gemini / Anthropic in the cloud — reads and edits your project through sandboxed tools, and asks before it does anything risky.
 
 ## Quick start
 
@@ -20,6 +20,7 @@ Needs Node 22.12 or newer. For Ollama, run `ollama serve` and pull a model that 
 | `/help` | commands and keyboard shortcuts |
 | `/clear` | start a new conversation |
 | `/mode [name]` | show or set the permission mode |
+| `/provider [name]` | set up a provider's API key and model, and switch to it (`/provider remove <name>` forgets it) |
 | `/model` | show the active model and provider |
 | `/quit` | exit |
 
@@ -40,7 +41,13 @@ Deny rules always win, even in `bypassPermissions`.
 
 ## Configuration
 
-**Provider** — `CORTEX_PROVIDER` picks `ollama`, `groq` or `anthropic`. If it is unset, Groq is used when `GROQ_API_KEY` is set, otherwise Ollama. Anthropic is never chosen automatically. Each provider needs its model variable (`OLLAMA_MODEL`, `GROQ_MODEL`, `ANTHROPIC_MODEL`); see `.env.example`.
+**Provider** — `CORTEX_PROVIDER` picks `ollama`, `google` or `anthropic`; if it is unset, Ollama is used. The cloud providers are never chosen automatically, so an API key exported for other tools can't start sending your code to a cloud. Each provider needs its model variable (`OLLAMA_MODEL`, `GOOGLE_MODEL`, `ANTHROPIC_MODEL`) and, for the cloud ones, a key (`GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`); see `.env.example`.
+
+**Setting up a provider from the app** — no environment files needed: run `cortex`, type `/provider`, pick a provider and answer two questions (the API key is typed hidden, and never shown, logged or added to the conversation). It is saved and used straight away, and remembered next time. If nothing is configured yet the app still opens and tells you to do this.
+
+- **Where:** `~/.cortex/credentials.json` in your home directory — never in the project, so it can't be committed. It is written readable by you only (on Windows it relies on your user profile's folder permissions) and it is **plain text**, so prefer an environment variable if that doesn't suit you.
+- **Precedence:** a set environment variable (`GOOGLE_API_KEY`, `CORTEX_PROVIDER`, …) beats what is saved, and the app tells you when one is overriding what you just entered. An empty variable counts as unset.
+- **Forgetting:** `/provider remove <name>` deletes a provider's saved settings; or delete the file.
 
 **Settings** — `.cortex/settings.json` in the project (and `~/.cortex/settings.json` for you) are merged. A malformed file is an error, not silently ignored.
 
@@ -71,7 +78,7 @@ An npm-workspaces monorepo. Each package is one component with its own tests. Th
 | Package | Responsibility | Depends on |
 | --- | --- | --- |
 | [`@cortex/core`](packages/core) | `Result` and `CortexError`, the workspace sandbox check, the `Logger` type | — |
-| [`@cortex/providers`](packages/providers) | the model contract, a registry, and the Ollama, Groq and Anthropic clients | core |
+| [`@cortex/providers`](packages/providers) | the model contract, a registry, and the Ollama, Google and Anthropic clients | core |
 | [`@cortex/tools`](packages/tools) | file, search and shell tools; each declares what it does (`read`, `edit`, `execute`) | core |
 | [`@cortex/context`](packages/context) | gathers the files, imports, tests and dependents relevant to a message | core |
 | [`@cortex/policy`](packages/policy) | permission modes and rules, and hooks | tools (types only) |
