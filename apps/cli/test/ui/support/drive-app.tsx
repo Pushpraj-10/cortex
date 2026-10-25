@@ -29,6 +29,8 @@ export const KEY = {
   left: "\u001b[D",
   home: "\u001b[H",
   end: "\u001b[F",
+  pageUp: "\u001b[5~",
+  pageDown: "\u001b[6~",
   ctrlA: "\u0001",
   ctrlE: "\u0005",
   ctrlK: "\u000b",

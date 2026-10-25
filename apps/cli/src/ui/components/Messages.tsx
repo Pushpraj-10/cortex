@@ -1,6 +1,7 @@
 /** The transcript: the scrolling viewport and the three things in it — messages, tool calls and notices. */
-import React from "react";
-import { Box, Text } from "ink";
+import React, { useEffect, useRef } from "react";
+import { Box, Text, measureElement, type DOMElement } from "ink";
+import { displayWidth } from "../../format/table.js";
 import { useTheme } from "../theme/ThemeContext.js";
 import type { MessageEntry, NoticeEntry, TimelineEntry } from "../types.js";
 import { useTerminalSize } from "../hooks/terminal.js";
@@ -74,6 +75,23 @@ interface MessageListProps {
   height: number;
   timeline: TimelineEntry[];
   expandedToolCallIds: ReadonlySet<string>;
+  /** Rows scrolled up from the bottom; 0 (the default) follows the newest content. */
+  scrollOffset?: number;
+  /** Called after each layout with the transcript's full height and the rows its viewport shows, so the owner can limit scrolling. */
+  onMeasure?(contentHeight: number, viewportHeight: number): void;
+}
+
+/** One row, shown while scrolled up, saying how far and how to get back; the longest wording that fits the width. */
+function ScrollNotice({ rows, columns }: { rows: number; columns: number }) {
+  const theme = useTheme();
+  const below = `↓ ${rows} ${rows === 1 ? "row" : "rows"} below`;
+  const options = [`${below} · pagedown for newer · send a message to jump to the end`, `${below} · pagedown for newer`, below];
+  const text = options.find((option) => 2 + displayWidth(option) <= columns) ?? below;
+  return (
+    <Text color={theme.muted} wrap="truncate-end">
+      {`  ${text}`}
+    </Text>
+  );
 }
 
 /**
@@ -85,18 +103,33 @@ interface MessageListProps {
  * The inner column must not shrink (`flexShrink={0}`). By default Yoga squeezes it, and everything in it, to fit the
  * viewport: rows overlap, spacing disappears, and what is left on screen is the start of the conversation instead of its end.
  */
-export function MessageList({ cwd, version, height, timeline, expandedToolCallIds }: MessageListProps) {
+export function MessageList({ cwd, version, height, timeline, expandedToolCallIds, scrollOffset = 0, onMeasure }: MessageListProps) {
   const { columns } = useTerminalSize();
+  // Scrolled up, one row of the region goes to the notice; the rest is the viewport.
+  const scrolled = scrollOffset > 0;
+  const viewport = Math.max(1, height - (scrolled ? 1 : 0));
+
+  // The inner column keeps its full height (it does not shrink), so its measured height is the whole transcript's.
+  const content = useRef<DOMElement>(null);
+  useEffect(() => {
+    if (content.current && onMeasure) onMeasure(measureElement(content.current).height, viewport);
+  });
+
+  // Scrolling is a negative bottom margin: it slides the column down past the viewport's bottom edge, which the clip hides,
+  // bringing older rows in at the top.
   return (
-    <Box height={height} overflow="hidden" flexDirection="column" justifyContent="flex-end">
-      <Box flexDirection="column" flexShrink={0}>
-        <Banner cwd={cwd} version={version} />
-        {timeline.map((entry) => {
-          if (entry.kind === "message") return <MessageBubble key={entry.id} message={entry} />;
-          if (entry.kind === "notice") return <NoticeLine key={entry.id} notice={entry} />;
-          return <ToolCall key={entry.id} entry={entry} expanded={expandedToolCallIds.has(entry.id)} width={columns} />;
-        })}
+    <Box height={height} flexDirection="column">
+      <Box height={viewport} overflow="hidden" flexDirection="column" justifyContent="flex-end">
+        <Box ref={content} flexDirection="column" flexShrink={0} marginBottom={-scrollOffset}>
+          <Banner cwd={cwd} version={version} />
+          {timeline.map((entry) => {
+            if (entry.kind === "message") return <MessageBubble key={entry.id} message={entry} />;
+            if (entry.kind === "notice") return <NoticeLine key={entry.id} notice={entry} />;
+            return <ToolCall key={entry.id} entry={entry} expanded={expandedToolCallIds.has(entry.id)} width={columns} />;
+          })}
+        </Box>
       </Box>
+      {scrolled && <ScrollNotice rows={scrollOffset} columns={columns} />}
     </Box>
   );
 }

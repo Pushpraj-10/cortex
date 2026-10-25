@@ -19,6 +19,7 @@ import { useProviderSetup } from "./hooks/useProviderSetup.js";
 import { activeMention, completeMention, rankFiles } from "../format/file-mentions.js";
 import { editFor, mentionMenuAction, useHomeEnd, type EdgeKey } from "./hooks/keys.js";
 import { useWorkspaceFiles } from "./hooks/useWorkspaceFiles.js";
+import { useTranscriptScroll } from "./hooks/useTranscriptScroll.js";
 import { continueLine, moveToLineEnd, moveToLineStart, moveVertical, normalizePaste, useTextInput } from "./hooks/useTextInput.js";
 import { TerminalSizeContext, useAltScreen, useTerminalSize } from "./hooks/terminal.js";
 import { slashMenuRows, transcriptRows } from "./layout.js";
@@ -85,6 +86,7 @@ export function App({
 
   const [session, setSession] = useState(initialSession);
   const chat = useChat(session, permissions, cwd);
+  const scroll = useTranscriptScroll();
   const placeholder = useMemo(() => pickPlaceholder(), []);
   const branch = useGitBranch(readBranch, chat.isThinking);
   const shownCwd = useMemo(() => tildify(cwd, homedir()), [cwd]);
@@ -174,6 +176,7 @@ export function App({
     removeProvider: setup.remove,
     clear: () => {
       chat.reset();
+      scroll.toBottom();
       setSession(newSession());
     },
     quit: exit,
@@ -186,6 +189,7 @@ export function App({
 
     input.set("", 0);
     history.reset();
+    scroll.toBottom(); // sending is a reason to look at the end of the conversation again
     // The same message sent twice in a row is remembered once.
     if (submitted[submitted.length - 1] !== text) {
       setSubmitted((previous) => [...previous, text]);
@@ -215,6 +219,14 @@ export function App({
       }
       if (key.ctrl && typed === "t") {
         chat.toggleLastToolCall();
+        return;
+      }
+
+      // Scrolling back through the conversation works at any moment, including while the agent is working or asking.
+      if (key.pageUp || key.pageDown) {
+        const page = Math.max(1, listHeight - 2);
+        if (key.pageUp) scroll.scrollUp(page);
+        else scroll.scrollDown(page);
         return;
       }
 
@@ -375,7 +387,15 @@ export function App({
     <ThemeContext.Provider value={theme}>
       <TerminalSizeContext.Provider value={terminalSize}>
         <Box flexDirection="column" height={rows}>
-          <MessageList cwd={cwd} version={version} height={listHeight} timeline={chat.timeline} expandedToolCallIds={chat.expandedToolCallIds} />
+          <MessageList
+            cwd={cwd}
+            version={version}
+            height={listHeight}
+            timeline={chat.timeline}
+            expandedToolCallIds={chat.expandedToolCallIds}
+            scrollOffset={scroll.offset}
+            onMeasure={scroll.onMeasure}
+          />
           {showThinking && <ThinkingIndicator active outputChars={chat.outputChars} />}
           {request && (
             <PermissionPrompt

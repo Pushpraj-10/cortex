@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
+import type { AgentSession } from "@cortex/agent";
 import { KEY, driveApp, type DrivenApp } from "./support/drive-app.js";
+import { settle } from "./support/render-frame.js";
 
 const BACKSLASH = String.fromCharCode(92);
 
@@ -50,6 +52,97 @@ describe("App: a conversation longer than the screen", () => {
     expect(screen).not.toMatch(/^> m0\s*$/m); // the oldest has scrolled off the top
     expect(screen).not.toContain("Press esc to interrupt a running request."); // nor is a banner row overwritten by a message
     expect(screen.split("\n")).toHaveLength(24);
+  });
+});
+
+describe("App: scrolling the transcript (page up and page down)", () => {
+  /** Sends `count` messages, `m0`, `m1`…, each in one piece to keep the test quick. */
+  async function sendMessages(a: DrivenApp, count: number, from = 0) {
+    for (let i = from; i < from + count; i += 1) {
+      await a.press(`m${i}`);
+      await a.press(KEY.enter);
+    }
+  }
+  const size = { rows: 24, columns: 80 };
+
+  it("page up shows older messages and a notice saying how far; page down comes back to the newest", async () => {
+    const a = await start(size);
+    await sendMessages(a, 20);
+    expect(a.screen()).toContain("> m19");
+    expect(a.screen()).not.toContain("rows below");
+
+    await a.press(KEY.pageUp);
+    expect(a.screen()).toContain("rows below");
+    expect(a.screen()).not.toContain("> m19");
+    expect(a.screen().split("\n")).toHaveLength(24);
+
+    await a.press(KEY.pageDown);
+    expect(a.screen()).toContain("> m19");
+    expect(a.screen()).not.toContain("rows below");
+    expect(a.screen().split("\n")).toHaveLength(24);
+  });
+
+  it("reaches the very top, where the banner is, and stops there however many times it is pressed", async () => {
+    const a = await start(size);
+    await sendMessages(a, 20);
+    for (let i = 0; i < 6; i += 1) await a.press(KEY.pageUp);
+    expect(a.screen()).toContain("v0.0.0-test");
+    expect(a.screen()).toContain("> m0");
+    expect(a.screen().split("\n")).toHaveLength(24);
+    await a.press(KEY.pageUp);
+    expect(a.screen()).toContain("> m0");
+  });
+
+  it("jumps back to the newest messages when a message is sent", async () => {
+    const a = await start(size);
+    await sendMessages(a, 20);
+    await a.press(KEY.pageUp);
+    expect(a.screen()).toContain("rows below");
+
+    await a.type("z");
+    await a.press(KEY.enter);
+    expect(a.screen()).toContain("> z");
+    expect(a.screen()).not.toContain("rows below");
+  });
+
+  it("types nothing and leaves a draft alone", async () => {
+    const a = await start(size);
+    await sendMessages(a, 20);
+    await a.type("draft");
+    await a.press(KEY.pageUp);
+    await a.press(KEY.pageDown);
+    await a.press(KEY.enter);
+    expect(a.sent.at(-1)).toBe("draft");
+  });
+
+  it("has nothing to scroll in a conversation that fits on the screen", async () => {
+    const a = await start(size);
+    await sendMessages(a, 2);
+    await a.press(KEY.pageUp);
+    expect(a.screen()).not.toContain("rows below");
+    expect(a.screen()).toContain("v0.0.0-test");
+  });
+
+  it("works while the agent is still working on a reply", async () => {
+    let release!: () => void;
+    let turns = 0;
+    const session: AgentSession = {
+      // eslint-disable-next-line require-yield
+      async *chat() {
+        turns += 1;
+        if (turns === 21) await new Promise<void>((resolve) => (release = resolve));
+      },
+    };
+    const a = await start({ ...size, initialSession: session });
+    await sendMessages(a, 21); // the last turn starts and does not finish
+    expect(a.screen()).toContain("esc to interrupt");
+
+    await a.press(KEY.pageUp);
+    expect(a.screen()).toContain("rows below");
+    expect(a.screen()).toContain("esc to interrupt");
+
+    release();
+    await settle();
   });
 });
 

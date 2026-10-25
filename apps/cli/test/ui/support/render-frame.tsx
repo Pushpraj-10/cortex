@@ -1,7 +1,8 @@
 /** Renders Ink elements into a fake terminal, for component and hook tests. */
-import type React from "react";
+import React from "react";
 import { PassThrough } from "node:stream";
 import { render } from "ink";
+import { TerminalSizeContext } from "../../../src/ui/hooks/terminal.js";
 
 const ANSI = /\u001b\[[0-9;?]*[A-Za-z]/g;
 
@@ -18,10 +19,17 @@ function fakeTerminal(columns: number, rows: number) {
   return { writes, options };
 }
 
+/**
+ * Puts `element` where the real app puts everything: under one shared terminal size. Without it every component that reads
+ * the size would listen for resizes itself, and a transcript of twenty messages would trip Node's ten-listener warning.
+ */
+const underSharedSize = (element: React.ReactElement, columns: number, rows: number) =>
+  React.createElement(TerminalSizeContext.Provider, { value: { columns, rows } }, element);
+
 /** Renders `element` once and returns what it drew as plain text. */
 export async function renderFrame(element: React.ReactElement, columns = 80, rows = 40): Promise<string> {
   const { writes, options } = fakeTerminal(columns, rows);
-  const app = render(element, options);
+  const app = render(underSharedSize(element, columns, rows), options);
   await new Promise((resolve) => setTimeout(resolve, 30));
   app.unmount();
 
@@ -30,7 +38,7 @@ export async function renderFrame(element: React.ReactElement, columns = 80, row
 
 /** Mounts `element` and keeps it live, for driving a hook from a test. Call `unmount()` when done. */
 export function mountElement(element: React.ReactElement, columns = 80, rows = 40): { unmount(): void } {
-  const app = render(element, fakeTerminal(columns, rows).options);
+  const app = render(underSharedSize(element, columns, rows), fakeTerminal(columns, rows).options);
   return { unmount: () => app.unmount() };
 }
 
