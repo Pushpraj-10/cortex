@@ -3,8 +3,8 @@
  * Ollama's native /api/chat takes tool-call arguments as objects and needs no call ids.
  */
 import { err, ok, type Result } from "@cortex/core";
-import type { ChatMessage, ChatRequest, LLMProvider, LLMProviderDescriptor, ToolCall, ToolSpec } from "./types.js";
-import { ProviderRequestError, postJson } from "./wire.js";
+import type { ChatMessage, ChatRequest, LLMProvider, LLMProviderDescriptor, StreamEvent, ToolCall, ToolSpec } from "./types.js";
+import { ProviderRequestError, postJson, postStream, readLines, streamInterrupted } from "./wire.js";
 
 export interface OllamaConfig {
   /** Defaults to http://localhost:11434. */
@@ -43,12 +43,19 @@ export interface OllamaRequestBody {
   model: string;
   messages: OllamaMessage[];
   tools?: FunctionToolSpec[];
-  stream: false;
+  stream: boolean;
   options?: { temperature: number };
 }
 
 interface OllamaChatResponse {
   message?: { content: string; tool_calls?: OllamaToolCall[] };
+}
+
+/** One line of a streamed reply: a piece of the message, and `done` on the last. An `error` replaces the message. */
+interface OllamaStreamChunk {
+  message?: { content?: string; tool_calls?: OllamaToolCall[] };
+  done?: boolean;
+  error?: string;
 }
 
 /**
@@ -106,6 +113,57 @@ export function createOllamaClient(config: OllamaConfig): LLMProvider {
       const { content, tool_calls } = reply.value.message;
       const toolCalls = fromOllamaToolCalls(tool_calls);
       return ok({ role: "assistant", content, ...(toolCalls ? { toolCalls } : {}) });
+    },
+
+    /** Streams from /api/chat (newline-delimited JSON). A stream that ends without its `done` line is an error, never a truncated answer. */
+    async *chatStream(request: ChatRequest): AsyncGenerator<StreamEvent, void, void> {
+      const opened = await postStream({
+        provider: "Ollama",
+        baseUrl,
+        url: `${baseUrl}/api/chat`,
+        body: { ...buildOllamaRequest(config, request), stream: true },
+        signal: request.signal,
+      });
+      if (!opened.ok) {
+        yield { type: "error", error: opened.error };
+        return;
+      }
+
+      let content = "";
+      const toolCalls: OllamaToolCall[] = [];
+      try {
+        for await (const line of readLines(opened.value)) {
+          if (line.trim() === "") continue;
+          let chunk: OllamaStreamChunk;
+          try {
+            chunk = JSON.parse(line) as OllamaStreamChunk;
+          } catch (error) {
+            yield { type: "error", error: new ProviderRequestError("Ollama", "Ollama sent a reply that is not valid JSON", error) };
+            return;
+          }
+          if (chunk.error) {
+            yield { type: "error", error: new ProviderRequestError("Ollama", `Ollama stream error: ${chunk.error}`) };
+            return;
+          }
+
+          const piece = chunk.message?.content ?? "";
+          if (piece !== "") {
+            content += piece;
+            yield { type: "text", delta: piece };
+          }
+          if (chunk.message?.tool_calls) toolCalls.push(...chunk.message.tool_calls);
+
+          if (chunk.done) {
+            const calls = fromOllamaToolCalls(toolCalls);
+            yield { type: "done", message: { role: "assistant", content, ...(calls ? { toolCalls: calls } : {}) } };
+            return;
+          }
+        }
+      } catch (error) {
+        yield { type: "error", error: streamInterrupted("Ollama", error) };
+        return;
+      }
+      yield { type: "error", error: new ProviderRequestError("Ollama", "Ollama stream ended before the reply was finished") };
     },
   };
 }

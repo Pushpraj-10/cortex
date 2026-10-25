@@ -7,6 +7,7 @@ import {
   toGoogleContents,
 } from "../src/google.js";
 import { ProviderRequestError } from "../src/wire.js";
+import { collect, dribble, streamResponse } from "./support/stream-response.js";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status });
@@ -199,5 +200,114 @@ describe("googleProviderDescriptor", () => {
   it("identifies itself and creates a client", () => {
     expect(googleProviderDescriptor.id).toBe("google");
     expect(typeof googleProviderDescriptor.createClient({ apiKey: "k", model: "m" }).chat).toBe("function");
+  });
+});
+
+describe("createGoogleClient chatStream", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const sse = (...chunks: object[]) => chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\r\n\r\n`).join("");
+  const parts = (...p: object[]) => ({ candidates: [{ content: { role: "model", parts: p } }] });
+  const request = { messages: [{ role: "user" as const, content: "hi" }] };
+  const config = { apiKey: "key-1", model: "gemini-test" };
+  const stream = (response: Response) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+    return createGoogleClient(config).chatStream!(request);
+  };
+
+  it("yields each piece of text as it arrives, and a message whose text is the pieces joined without a separator", async () => {
+    const events = await collect(stream(streamResponse([sse(parts({ text: "Hel" }), parts({ text: "lo wor" }), { ...parts({ text: "ld" }), candidates: [{ content: { role: "model", parts: [{ text: "ld" }] }, finishReason: "STOP" }] })])));
+    expect(events).toEqual([
+      { type: "text", delta: "Hel" },
+      { type: "text", delta: "lo wor" },
+      { type: "text", delta: "ld" },
+      { type: "done", message: { role: "assistant", content: "Hello world" } },
+    ]);
+  });
+
+  it("gives the same events however the network splits the stream", async () => {
+    const text = sse(parts({ text: "Hel" }), parts({ text: "lo" }));
+    expect(await collect(stream(streamResponse(dribble(text))))).toEqual(await collect(stream(streamResponse([text]))));
+  });
+
+  it("hides thought parts, from the pieces and from the message", async () => {
+    const events = await collect(stream(streamResponse([sse(parts({ text: "pondering...", thought: true }), parts({ text: "Answer" }))])));
+    expect(events).toEqual([
+      { type: "text", delta: "Answer" },
+      { type: "done", message: { role: "assistant", content: "Answer" } },
+    ]);
+  });
+
+  it("returns a function call as the message's tool call, and only the first when it asks for several", async () => {
+    const events = await collect(
+      stream(
+        streamResponse([
+          sse(parts({ text: "Checking." }), parts({ functionCall: { name: "read_file", args: { path: "a.ts" } } }, { functionCall: { name: "read_file", args: { path: "b.ts" } } })),
+        ]),
+      ),
+    );
+    expect(events[events.length - 1]).toEqual({
+      type: "done",
+      message: { role: "assistant", content: "Checking.", toolCalls: [{ toolName: "read_file", args: { path: "a.ts" } }] },
+    });
+  });
+
+  it("asks for a server-sent-event stream with the same body as a normal request, and the API key in a header", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(streamResponse([sse(parts({ text: "x" }))]));
+    vi.stubGlobal("fetch", fetchMock);
+    await collect(createGoogleClient({ ...config, model: "models/gemini-test" }).chatStream!(request));
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://generativelanguage.googleapis.com/v1beta/models/gemini-test:streamGenerateContent?alt=sse");
+    expect((init.headers as Record<string, string>)["x-goog-api-key"]).toBe("key-1");
+    expect(JSON.parse(init.body as string)).toEqual(buildGoogleRequest(request));
+  });
+
+  it("reports a stream with no content, saying why when Google did", async () => {
+    const blocked = await collect(stream(streamResponse([sse({ promptFeedback: { blockReason: "SAFETY" } })])));
+    expect(blocked).toMatchObject([{ type: "error", error: { message: "Google response had no content (blocked: SAFETY)" } }]);
+
+    const empty = await collect(stream(streamResponse([sse({ candidates: [{ finishReason: "MAX_TOKENS" }] })])));
+    expect(empty).toMatchObject([{ type: "error", error: { message: "Google response had no content (finish reason: MAX_TOKENS)" } }]);
+  });
+
+  it("reports an HTTP error, an unreachable server, an error event and a reply that is not JSON as one error event each", async () => {
+    const refused = await collect(stream(new Response('{"error":{"code":404}}', { status: 404 })));
+    expect(refused).toHaveLength(1);
+    expect(refused[0]).toMatchObject({ type: "error", error: expect.any(ProviderRequestError) });
+
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
+    expect(await collect(createGoogleClient(config).chatStream!(request))).toMatchObject([{ type: "error", error: { message: expect.stringContaining("Failed to reach Google") } }]);
+
+    const failed = await collect(stream(streamResponse([sse({ error: { message: "quota exceeded" } })])));
+    expect(failed).toMatchObject([{ type: "error", error: { message: "Google stream error: quota exceeded" } }]);
+
+    const garbage = await collect(stream(streamResponse(["data: not json\n\n"])));
+    expect(garbage).toMatchObject([{ type: "error", error: { message: "Google sent a reply that is not valid JSON" } }]);
+  });
+
+  it("reports a connection that drops part-way, after the text already shown", async () => {
+    const events = await collect(stream(streamResponse([sse(parts({ text: "so" }))], { failAfter: new Error("connection reset") })));
+    expect(events[0]).toEqual({ type: "text", delta: "so" });
+    expect(events[1]).toMatchObject({ type: "error", error: { message: "Google stream was interrupted: connection reset" } });
+  });
+
+  it("stops with a cancelled error when the caller aborts mid-stream", async () => {
+    const controller = new AbortController();
+    const body = new ReadableStream<Uint8Array>({
+      start(readable) {
+        readable.enqueue(new TextEncoder().encode(sse(parts({ text: "one" }))));
+        controller.signal.addEventListener("abort", () => readable.error(new DOMException("aborted", "AbortError")));
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body)));
+
+    const events: unknown[] = [];
+    for await (const event of createGoogleClient(config).chatStream!({ ...request, signal: controller.signal })) {
+      events.push(event);
+      if (events.length === 1) controller.abort();
+    }
+    expect(events[1]).toMatchObject({ type: "error", error: { message: "Google request was cancelled" } });
   });
 });

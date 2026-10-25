@@ -8,8 +8,8 @@
  * `tool_use` must be answered by a `tool_result` with the same id.
  */
 import { err, ok, type Result } from "@cortex/core";
-import type { ChatMessage, ChatRequest, LLMProvider, LLMProviderDescriptor, ToolCall } from "./types.js";
-import { ProviderRequestError, postJson } from "./wire.js";
+import type { ChatMessage, ChatRequest, LLMProvider, LLMProviderDescriptor, StreamEvent, ToolCall } from "./types.js";
+import { ProviderRequestError, postJson, postStream, readSseData, streamInterrupted } from "./wire.js";
 
 export interface AnthropicConfig {
   apiKey: string;
@@ -45,7 +45,19 @@ export interface AnthropicRequestBody {
   /** The agent loop runs one tool call per turn, so the model is told not to emit several. */
   tool_choice?: { type: "auto"; disable_parallel_tool_use: true };
   temperature?: number;
+  stream?: boolean;
 }
+
+/** The server-sent events of a streamed reply that matter here; the rest (ping, message_start, message_delta) are ignored. */
+type AnthropicStreamEvent =
+  | { type: "content_block_start"; index: number; content_block: { type: string; text?: string; id?: string; name?: string } }
+  | { type: "content_block_delta"; index: number; delta: { type: string; text?: string; partial_json?: string } }
+  | { type: "message_stop" }
+  | { type: "error"; error?: { message?: string } }
+  | { type: string };
+
+/** A content block being assembled from its deltas. */
+type PendingBlock = { type: "text"; text: string } | { type: "tool_use"; id: string; name: string; json: string } | { type: "other" };
 
 interface AnthropicResponse {
   content?: AnthropicBlock[];
@@ -144,6 +156,90 @@ export function createAnthropicClient(config: AnthropicConfig): LLMProvider {
       if (!reply.value.content) return err(new ProviderRequestError("Anthropic", "Anthropic response had no content"));
 
       return ok({ role: "assistant", ...fromAnthropicContent(reply.value.content) });
+    },
+
+    /**
+     * Streams from /v1/messages with `stream: true`. Text is passed on as it is written; a tool call's arguments
+     * arrive as JSON fragments, so each tool_use block is assembled and parsed once, when the reply is complete. A
+     * stream that ends without `message_stop` is an error, never a truncated answer.
+     */
+    async *chatStream(request: ChatRequest): AsyncGenerator<StreamEvent, void, void> {
+      const opened = await postStream({
+        provider: "Anthropic",
+        baseUrl,
+        url: `${baseUrl}/v1/messages`,
+        headers: { "x-api-key": config.apiKey, "anthropic-version": API_VERSION },
+        body: { ...buildAnthropicRequest(config, request), stream: true },
+        signal: request.signal,
+      });
+      if (!opened.ok) {
+        yield { type: "error", error: opened.error };
+        return;
+      }
+
+      const blocks: PendingBlock[] = [];
+      let finished = false;
+      try {
+        for await (const data of readSseData(opened.value)) {
+          let event: AnthropicStreamEvent;
+          try {
+            event = JSON.parse(data) as AnthropicStreamEvent;
+          } catch (error) {
+            yield { type: "error", error: new ProviderRequestError("Anthropic", "Anthropic sent a reply that is not valid JSON", error) };
+            return;
+          }
+
+          if (event.type === "content_block_start") {
+            const { index, content_block: block } = event as Extract<AnthropicStreamEvent, { type: "content_block_start" }>;
+            if (block.type === "text") {
+              blocks[index] = { type: "text", text: block.text ?? "" };
+              if (block.text) yield { type: "text", delta: block.text };
+            } else if (block.type === "tool_use") {
+              blocks[index] = { type: "tool_use", id: block.id ?? "", name: block.name ?? "", json: "" };
+            } else {
+              blocks[index] = { type: "other" }; // e.g. "thinking": not part of the reply we pass on
+            }
+          } else if (event.type === "content_block_delta") {
+            const { index, delta } = event as Extract<AnthropicStreamEvent, { type: "content_block_delta" }>;
+            const block = blocks[index];
+            if (block?.type === "text" && delta.type === "text_delta" && delta.text) {
+              block.text += delta.text;
+              yield { type: "text", delta: delta.text };
+            } else if (block?.type === "tool_use" && delta.type === "input_json_delta") {
+              block.json += delta.partial_json ?? "";
+            }
+          } else if (event.type === "message_stop") {
+            finished = true;
+          } else if (event.type === "error") {
+            const message = (event as Extract<AnthropicStreamEvent, { type: "error" }>).error?.message ?? "unknown error";
+            yield { type: "error", error: new ProviderRequestError("Anthropic", `Anthropic stream error: ${message}`) };
+            return;
+          }
+        }
+      } catch (error) {
+        yield { type: "error", error: streamInterrupted("Anthropic", error) };
+        return;
+      }
+
+      if (!finished) {
+        yield { type: "error", error: new ProviderRequestError("Anthropic", "Anthropic stream ended before the reply was finished") };
+        return;
+      }
+
+      const content: AnthropicBlock[] = [];
+      for (const block of blocks) {
+        if (block?.type === "text") {
+          content.push({ type: "text", text: block.text });
+        } else if (block?.type === "tool_use") {
+          try {
+            content.push({ type: "tool_use", id: block.id, name: block.name, input: block.json === "" ? {} : JSON.parse(block.json) });
+          } catch (error) {
+            yield { type: "error", error: new ProviderRequestError("Anthropic", `Anthropic sent arguments for ${block.name} that are not valid JSON`, error) };
+            return;
+          }
+        }
+      }
+      yield { type: "done", message: { role: "assistant", ...fromAnthropicContent(content) } };
     },
   };
 }

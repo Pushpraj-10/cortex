@@ -39,6 +39,16 @@ export interface ChatRequest {
   signal?: AbortSignal;
 }
 
+/**
+ * What a streaming reply is made of, in order: any number of `text` pieces as the model writes, then exactly one
+ * `done` carrying the complete message (the same message `chat` would have returned, tool calls included), or one
+ * `error` if the request failed or the stream ended before it was finished. Failures are events, not exceptions.
+ */
+export type StreamEvent =
+  | { type: "text"; delta: string }
+  | { type: "done"; message: ChatMessage }
+  | { type: "error"; error: Error };
+
 /** Base interface for LLM providers. */
 export interface LLMProvider {
   /**
@@ -46,6 +56,11 @@ export interface LLMProvider {
    * Non-streaming: waits for the entire response before returning.
    */
   chat(request: ChatRequest): Promise<Result<ChatMessage>>;
+  /**
+   * The same request, answered as a stream so the text can be shown as it is written. Optional: a provider that
+   * cannot stream simply omits it and callers use `chat`.
+   */
+  chatStream?(request: ChatRequest): AsyncGenerator<StreamEvent, void, void>;
 }
 
 /**

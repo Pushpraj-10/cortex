@@ -7,6 +7,7 @@ import {
   toAnthropicMessages,
 } from "../src/anthropic.js";
 import { ProviderRequestError } from "../src/wire.js";
+import { collect, dribble, streamResponse } from "./support/stream-response.js";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status });
@@ -145,5 +146,131 @@ describe("anthropicProviderDescriptor", () => {
   it("identifies itself and creates a client", () => {
     expect(anthropicProviderDescriptor.id).toBe("anthropic");
     expect(typeof anthropicProviderDescriptor.createClient({ apiKey: "k", model: "m" }).chat).toBe("function");
+  });
+});
+
+describe("createAnthropicClient chatStream", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const sse = (name: string, payload: object) => `event: ${name}\ndata: ${JSON.stringify({ type: name, ...payload })}\n\n`;
+  const start = sse("message_start", { message: { id: "msg_1", role: "assistant", content: [] } }) + sse("ping", {});
+  const textBlock = (index: number, ...pieces: string[]) =>
+    sse("content_block_start", { index, content_block: { type: "text", text: "" } }) +
+    pieces.map((text) => sse("content_block_delta", { index, delta: { type: "text_delta", text } })).join("") +
+    sse("content_block_stop", { index });
+  const toolBlock = (index: number, name: string, ...json: string[]) =>
+    sse("content_block_start", { index, content_block: { type: "tool_use", id: `toolu_${index}`, name, input: {} } }) +
+    json.map((partial_json) => sse("content_block_delta", { index, delta: { type: "input_json_delta", partial_json } })).join("") +
+    sse("content_block_stop", { index });
+  const stop = sse("message_delta", { delta: { stop_reason: "end_turn" } }) + sse("message_stop", {});
+
+  const request = { messages: [{ role: "user" as const, content: "hi" }] };
+  const config = { apiKey: "key-1", model: "claude-test" };
+  const stream = (response: Response) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+    return createAnthropicClient(config).chatStream!(request);
+  };
+
+  it("yields each piece of text as it is written, then the whole message", async () => {
+    const events = await collect(stream(streamResponse([start + textBlock(0, "Hello", " wor", "ld") + stop])));
+    expect(events).toEqual([
+      { type: "text", delta: "Hello" },
+      { type: "text", delta: " wor" },
+      { type: "text", delta: "ld" },
+      { type: "done", message: { role: "assistant", content: "Hello world" } },
+    ]);
+  });
+
+  it("gives the same events however the network splits the stream", async () => {
+    const text = start + textBlock(0, "Hel", "lo") + stop;
+    expect(await collect(stream(streamResponse(dribble(text))))).toEqual(await collect(stream(streamResponse([text]))));
+  });
+
+  it("assembles a tool call from JSON fragments, without showing them as text", async () => {
+    const events = await collect(stream(streamResponse([start + textBlock(0, "Let me check.") + toolBlock(1, "read_file", '{"pa', 'th": "a.', 'ts"}') + stop])));
+    expect(events.filter((event) => event.type === "text")).toEqual([{ type: "text", delta: "Let me check." }]);
+    expect(events[events.length - 1]).toEqual({
+      type: "done",
+      message: { role: "assistant", content: "Let me check.", toolCalls: [{ toolName: "read_file", args: { path: "a.ts" } }] },
+    });
+  });
+
+  it("treats a tool call with no arguments as an empty object", async () => {
+    const events = await collect(stream(streamResponse([start + toolBlock(0, "list_all") + stop])));
+    expect(events).toEqual([{ type: "done", message: { role: "assistant", content: "", toolCalls: [{ toolName: "list_all", args: {} }] } }]);
+  });
+
+  it("joins separate text blocks with a newline in the final message, as a whole reply is joined", async () => {
+    const events = await collect(stream(streamResponse([start + textBlock(0, "a") + textBlock(1, "b") + stop])));
+    expect(events[events.length - 1]).toEqual({ type: "done", message: { role: "assistant", content: "a\nb" } });
+  });
+
+  it("ignores a thinking block", async () => {
+    const thinking =
+      sse("content_block_start", { index: 0, content_block: { type: "thinking", thinking: "" } }) +
+      sse("content_block_delta", { index: 0, delta: { type: "thinking_delta", thinking: "hmm" } }) +
+      sse("content_block_stop", { index: 0 });
+    const events = await collect(stream(streamResponse([start + thinking + textBlock(1, "Answer") + stop])));
+    expect(events).toEqual([
+      { type: "text", delta: "Answer" },
+      { type: "done", message: { role: "assistant", content: "Answer" } },
+    ]);
+  });
+
+  it("asks for a stream with the same body as a normal request, and the key and version in headers", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(streamResponse([start + textBlock(0, "x") + stop]));
+    vi.stubGlobal("fetch", fetchMock);
+    await collect(createAnthropicClient({ ...config, baseUrl: "http://example.test" }).chatStream!(request));
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://example.test/v1/messages");
+    expect(init.headers).toMatchObject({ "x-api-key": "key-1", "anthropic-version": "2023-06-01" });
+    expect(JSON.parse(init.body as string)).toEqual(JSON.parse(JSON.stringify({ ...buildAnthropicRequest(config, request), stream: true })));
+  });
+
+  it("reports an HTTP error, an unreachable server, an error event and a reply that is not JSON as one error event each", async () => {
+    const refused = await collect(stream(new Response("unauthorized", { status: 401 })));
+    expect(refused).toHaveLength(1);
+    expect(refused[0]).toMatchObject({ type: "error", error: expect.any(ProviderRequestError) });
+
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
+    expect(await collect(createAnthropicClient(config).chatStream!(request))).toMatchObject([{ type: "error", error: { message: expect.stringContaining("Failed to reach Anthropic") } }]);
+
+    const overloaded = await collect(stream(streamResponse([start + sse("error", { error: { type: "overloaded_error", message: "Overloaded" } })])));
+    expect(overloaded).toMatchObject([{ type: "error", error: { message: "Anthropic stream error: Overloaded" } }]);
+
+    const garbage = await collect(stream(streamResponse(["data: not json\n\n"])));
+    expect(garbage).toMatchObject([{ type: "error", error: { message: "Anthropic sent a reply that is not valid JSON" } }]);
+  });
+
+  it("does not present a stream that ended before message_stop as a finished answer", async () => {
+    const events = await collect(stream(streamResponse([start + textBlock(0, "partial")])));
+    expect(events).toMatchObject([{ type: "text", delta: "partial" }, { type: "error", error: { message: "Anthropic stream ended before the reply was finished" } }]);
+  });
+
+  it("reports tool arguments that are not valid JSON", async () => {
+    const events = await collect(stream(streamResponse([start + toolBlock(0, "read_file", '{"path": ') + stop])));
+    expect(events).toMatchObject([{ type: "error", error: { message: expect.stringContaining("arguments for read_file that are not valid JSON") } }]);
+  });
+
+  it("reports a connection that drops part-way, and a cancelled request", async () => {
+    const dropped = await collect(stream(streamResponse([start + textBlock(0, "so")], { failAfter: new Error("connection reset") })));
+    expect(dropped[dropped.length - 1]).toMatchObject({ type: "error", error: { message: "Anthropic stream was interrupted: connection reset" } });
+
+    const controller = new AbortController();
+    const body = new ReadableStream<Uint8Array>({
+      start(readable) {
+        readable.enqueue(new TextEncoder().encode(start + textBlock(0, "one")));
+        controller.signal.addEventListener("abort", () => readable.error(new DOMException("aborted", "AbortError")));
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body)));
+    const events: { type: string }[] = [];
+    for await (const event of createAnthropicClient(config).chatStream!({ ...request, signal: controller.signal })) {
+      events.push(event);
+      if (event.type === "text") controller.abort();
+    }
+    expect(events[events.length - 1]).toMatchObject({ type: "error", error: { message: "Anthropic request was cancelled" } });
   });
 });

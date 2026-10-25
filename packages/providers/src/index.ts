@@ -10,6 +10,7 @@ export type {
   ChatRole,
   LLMProvider,
   LLMProviderDescriptor,
+  StreamEvent,
   ToolCall,
   ToolSpec,
 } from "./types.js";

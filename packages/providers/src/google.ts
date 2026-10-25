@@ -8,8 +8,8 @@
  * inside a user turn; and `functionResponse.response` must be an object.
  */
 import { err, ok, type Result } from "@cortex/core";
-import type { ChatMessage, ChatRequest, LLMProvider, LLMProviderDescriptor, ToolCall, ToolSpec } from "./types.js";
-import { ProviderRequestError, postJson } from "./wire.js";
+import type { ChatMessage, ChatRequest, LLMProvider, LLMProviderDescriptor, StreamEvent, ToolCall, ToolSpec } from "./types.js";
+import { ProviderRequestError, postJson, postStream, readSseData, streamInterrupted } from "./wire.js";
 
 export interface GoogleConfig {
   apiKey: string;
@@ -177,6 +177,66 @@ export function createGoogleClient(config: GoogleConfig): LLMProvider {
       }
 
       return ok({ role: "assistant", ...fromGoogleParts(candidate.content.parts) });
+    },
+
+    /**
+     * Streams from `streamGenerateContent?alt=sse`: each event is a piece of the same reply. Visible text is passed on
+     * as it arrives; the final message is built from the pieces the way `chat` builds it from a whole reply.
+     */
+    async *chatStream(request: ChatRequest): AsyncGenerator<StreamEvent, void, void> {
+      const opened = await postStream({
+        provider: "Google",
+        baseUrl,
+        url: `${baseUrl}/v1beta/models/${model}:streamGenerateContent?alt=sse`,
+        headers: { "x-goog-api-key": config.apiKey },
+        body: buildGoogleRequest(request),
+        signal: request.signal,
+      });
+      if (!opened.ok) {
+        yield { type: "error", error: opened.error };
+        return;
+      }
+
+      const text: string[] = [];
+      const calls: GooglePart[] = [];
+      let reason: string | undefined;
+      try {
+        for await (const data of readSseData(opened.value)) {
+          let chunk: GoogleResponse & { error?: { message?: string } };
+          try {
+            chunk = JSON.parse(data) as typeof chunk;
+          } catch (error) {
+            yield { type: "error", error: new ProviderRequestError("Google", "Google sent a reply that is not valid JSON", error) };
+            return;
+          }
+          if (chunk.error) {
+            yield { type: "error", error: new ProviderRequestError("Google", `Google stream error: ${chunk.error.message ?? "unknown error"}`) };
+            return;
+          }
+
+          const candidate = chunk.candidates?.[0];
+          if (chunk.promptFeedback?.blockReason) reason = `blocked: ${chunk.promptFeedback.blockReason}`;
+          else if (candidate?.finishReason) reason = `finish reason: ${candidate.finishReason}`;
+
+          for (const part of candidate?.content?.parts ?? []) {
+            if ("functionCall" in part) {
+              calls.push(part);
+            } else if ("text" in part && !part.thought && part.text !== "") {
+              text.push(part.text);
+              yield { type: "text", delta: part.text };
+            }
+          }
+        }
+      } catch (error) {
+        yield { type: "error", error: streamInterrupted("Google", error) };
+        return;
+      }
+
+      if (text.length === 0 && calls.length === 0) {
+        yield { type: "error", error: new ProviderRequestError("Google", `Google response had no content${reason ? ` (${reason})` : ""}`) };
+        return;
+      }
+      yield { type: "done", message: { role: "assistant", ...fromGoogleParts([{ text: text.join("") }, ...calls]) } };
     },
   };
 }

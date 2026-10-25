@@ -8,6 +8,7 @@ import {
   toOllamaMessage,
 } from "../src/ollama.js";
 import { ProviderRequestError } from "../src/wire.js";
+import { collect, dribble, streamResponse } from "./support/stream-response.js";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status });
@@ -242,5 +243,141 @@ describe("ollamaProviderDescriptor", () => {
   it("identifies itself and creates a client", () => {
     expect(ollamaProviderDescriptor.id).toBe("ollama");
     expect(typeof ollamaProviderDescriptor.createClient({ model: "m" }).chat).toBe("function");
+  });
+});
+
+describe("createOllamaClient chatStream", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const ndjson = (...chunks: object[]) => chunks.map((chunk) => `${JSON.stringify(chunk)}\n`).join("");
+  const request = { messages: [{ role: "user" as const, content: "hi" }] };
+  const stream = (response: Response) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+    return createOllamaClient({ model: "llama3.1" }).chatStream!(request);
+  };
+
+  it("yields each piece of text as it arrives, then the whole message", async () => {
+    const events = await collect(
+      stream(streamResponse([ndjson({ message: { content: "Hel" }, done: false }, { message: { content: "lo" }, done: false }, { message: { content: "" }, done: true })])),
+    );
+    expect(events).toEqual([
+      { type: "text", delta: "Hel" },
+      { type: "text", delta: "lo" },
+      { type: "done", message: { role: "assistant", content: "Hello" } },
+    ]);
+  });
+
+  it("gives the same events however the network splits the lines", async () => {
+    const text = ndjson({ message: { content: "Hel" }, done: false }, { message: { content: "lo" }, done: false }, { done: true });
+    const whole = await collect(stream(streamResponse([text])));
+    const dribbled = await collect(stream(streamResponse(dribble(text))));
+    expect(dribbled).toEqual(whole);
+    expect(whole[whole.length - 1]).toEqual({ type: "done", message: { role: "assistant", content: "Hello" } });
+  });
+
+  it("collects a tool call that arrives in a chunk of its own", async () => {
+    const events = await collect(
+      stream(
+        streamResponse([
+          ndjson(
+            { message: { content: "Let me look." }, done: false },
+            { message: { content: "", tool_calls: [{ function: { name: "read_file", arguments: { path: "a.ts" } } }] }, done: false },
+            { message: { content: "" }, done: true },
+          ),
+        ]),
+      ),
+    );
+    expect(events[events.length - 1]).toEqual({
+      type: "done",
+      message: { role: "assistant", content: "Let me look.", toolCalls: [{ toolName: "read_file", args: { path: "a.ts" } }] },
+    });
+    expect(events.filter((event) => event.type === "text")).toEqual([{ type: "text", delta: "Let me look." }]);
+  });
+
+  it("keeps text carried by the final done line, and skips blank lines", async () => {
+    const events = await collect(stream(streamResponse([`\n${ndjson({ message: { content: "a" }, done: false })}\n${ndjson({ message: { content: "!" }, done: true })}`])));
+    expect(events).toEqual([
+      { type: "text", delta: "a" },
+      { type: "text", delta: "!" },
+      { type: "done", message: { role: "assistant", content: "a!" } },
+    ]);
+  });
+
+  it("asks for a stream: stream true at /api/chat, with the same messages and tools as a normal request", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(streamResponse([ndjson({ done: true })]));
+    vi.stubGlobal("fetch", fetchMock);
+    await collect(
+      createOllamaClient({ model: "llama3.1", baseUrl: "http://example.test" }).chatStream!({
+        messages: [{ role: "user", content: "hello" }],
+        tools: [{ name: "read_file", description: "Reads", parametersSchema: { type: "object" } }],
+        temperature: 0.2,
+      }),
+    );
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://example.test/api/chat");
+    expect(JSON.parse(init.body as string)).toEqual({
+      model: "llama3.1",
+      messages: [{ role: "user", content: "hello" }],
+      tools: [{ type: "function", function: { name: "read_file", description: "Reads", parameters: { type: "object" } } }],
+      stream: true,
+      options: { temperature: 0.2 },
+    });
+  });
+
+  it("reports an HTTP error, an unreachable server and a server-side error line as one error event each", async () => {
+    const refused = await collect(stream(new Response("boom", { status: 500 })));
+    expect(refused).toHaveLength(1);
+    expect(refused[0]).toMatchObject({ type: "error", error: expect.any(ProviderRequestError) });
+
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
+    const unreachable = await collect(createOllamaClient({ model: "m" }).chatStream!(request));
+    expect(unreachable).toMatchObject([{ type: "error", error: { message: "Failed to reach Ollama at http://localhost:11434" } }]);
+
+    const failed = await collect(stream(streamResponse([ndjson({ error: "model 'x' not found" })])));
+    expect(failed).toMatchObject([{ type: "error", error: { message: "Ollama stream error: model 'x' not found" } }]);
+  });
+
+  it("does not present a stream that ended early as a finished answer", async () => {
+    const events = await collect(stream(streamResponse([ndjson({ message: { content: "partial" }, done: false })])));
+    expect(events).toMatchObject([{ type: "text", delta: "partial" }, { type: "error", error: { message: "Ollama stream ended before the reply was finished" } }]);
+  });
+
+  it("reports a reply that is not JSON", async () => {
+    const events = await collect(stream(streamResponse(["this is not json\n"])));
+    expect(events).toMatchObject([{ type: "error", error: { message: "Ollama sent a reply that is not valid JSON" } }]);
+  });
+
+  it("reports a connection that drops part-way", async () => {
+    const events = await collect(stream(streamResponse([ndjson({ message: { content: "so" }, done: false })], { failAfter: new Error("connection reset") })));
+    expect(events[0]).toEqual({ type: "text", delta: "so" });
+    expect(events[1]).toMatchObject({ type: "error", error: { message: "Ollama stream was interrupted: connection reset" } });
+  });
+
+  it("stops with a cancelled error when the caller aborts mid-stream", async () => {
+    const controller = new AbortController();
+    const body = new ReadableStream<Uint8Array>({
+      start(stream) {
+        stream.enqueue(new TextEncoder().encode(ndjson({ message: { content: "one" }, done: false })));
+        controller.signal.addEventListener("abort", () => stream.error(new DOMException("aborted", "AbortError")));
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body)));
+
+    const events: unknown[] = [];
+    for await (const event of createOllamaClient({ model: "m" }).chatStream!({ ...request, signal: controller.signal })) {
+      events.push(event);
+      if (events.length === 1) controller.abort();
+    }
+    expect(events[0]).toEqual({ type: "text", delta: "one" });
+    expect(events[1]).toMatchObject({ type: "error", error: { message: "Ollama request was cancelled" } });
+  });
+
+  it("leaves the normal chat() request non-streaming", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ message: { content: "hi" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    await createOllamaClient({ model: "m" }).chat(request);
+    expect(JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string).stream).toBe(false);
   });
 });
