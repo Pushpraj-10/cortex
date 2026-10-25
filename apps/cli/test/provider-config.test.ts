@@ -102,6 +102,11 @@ describe("selectProvider", () => {
     expect(ollama.ok && ollama.value.id).toBe("ollama");
   });
 
+  it("treats an empty CORTEX_PROVIDER as unset, as in a copied .env.example", () => {
+    const result = selectProvider({ CORTEX_PROVIDER: "", OLLAMA_MODEL: "llama3.1" });
+    expect(result.ok && result.value.id).toBe("ollama");
+  });
+
   it("rejects an unknown CORTEX_PROVIDER", () => {
     const result = selectProvider({ CORTEX_PROVIDER: "openai" });
     expect(!result.ok && result.error).toBeInstanceOf(InvalidProviderError);

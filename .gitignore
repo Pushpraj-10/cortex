@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .env
-.cortex/
 *.log
 *.tsbuildinfo
+
+# Note: .cortex/ (settings.json, skills/) is deliberately NOT ignored, so a project can commit its
+# permission rules, hooks and skills. Keep personal overrides in ~/.cortex instead.

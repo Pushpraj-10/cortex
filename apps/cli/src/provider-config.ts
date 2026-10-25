@@ -97,7 +97,7 @@ export interface ProviderChoice {
 
 /** Applies the selection order described at the top of this file and resolves the chosen provider's config. */
 export function selectProvider(env: NodeJS.ProcessEnv = process.env): Result<ProviderChoice> {
-  const requested = env.CORTEX_PROVIDER;
+  const requested = env.CORTEX_PROVIDER || undefined; // an empty value (as in a copied .env.example) means "not set"
   if (requested !== undefined && !(PROVIDER_IDS as readonly string[]).includes(requested)) {
     return err(new InvalidProviderError(requested));
   }

@@ -153,6 +153,8 @@ function logEvent(n: number, event: AgentEvent) {
     log(`EVENT ${n} [toolCall]`, { toolName: event.toolName, args: event.args });
   } else if (event.type === "toolResult") {
     log(`EVENT ${n} [toolResult]`, { toolName: event.toolName, output: event.output });
+  } else if (event.type === "compacted") {
+    log(`EVENT ${n} [compacted]`, { before: event.before, after: event.after });
   } else {
     log(`EVENT ${n} [message]`, event.content);
   }

@@ -1,14 +1,15 @@
 {
   "files": [],
   "references": [
-    { "path": "apps/cli" },
     { "path": "packages/core" },
     { "path": "packages/providers" },
     { "path": "packages/tools" },
+    { "path": "packages/context" },
     { "path": "packages/policy" },
     { "path": "packages/extensions" },
     { "path": "packages/config" },
-    { "path": "packages/context" },
-    { "path": "packages/agent" }
+    { "path": "packages/agent" },
+    { "path": "apps/cli" },
+    { "path": "tests" }
   ]
 }

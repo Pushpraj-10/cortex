@@ -11,10 +11,15 @@
   "scripts": {
     "dev": "tsx apps/cli/src/index.ts",
     "typecheck": "tsc --build",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:packages": "npm test --workspaces --if-present",
+    "test:e2e": "npm run test:e2e:agent && npm run test:e2e:cli && npm run test:e2e:context",
+    "test:e2e:agent": "tsx tests/e2e-agent-test.ts",
+    "test:e2e:cli": "tsx tests/e2e-cli-test.ts",
+    "test:e2e:context": "tsx tests/e2e-context-test.ts"
   },
   "engines": {
-    "node": ">=18.17"
+    "node": ">=22.12"
   },
   "devDependencies": {
     "typescript": "^5.6.2",

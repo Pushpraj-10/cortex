@@ -1,0 +1,16 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist"
+  },
+  "references": [
+    { "path": "../apps/cli" },
+    { "path": "../packages/agent" },
+    { "path": "../packages/context" },
+    { "path": "../packages/core" },
+    { "path": "../packages/providers" },
+    { "path": "../packages/tools" }
+  ],
+  "include": ["*.ts"]
+}
