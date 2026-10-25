@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { ok, type Result } from "@cortex/shared";
-import type { ChatMessage, LLMProvider } from "@cortex/llm";
+import { ok, type Result } from "@cortex/core";
+import type { ChatMessage, LLMProvider } from "@cortex/providers";
 import { createAgentSession } from "../../src/core/agent-session.js";
 import type { Executor } from "../../src/types.js";
 

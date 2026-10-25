@@ -1,4 +1,4 @@
-import type { Result } from "@cortex/shared";
+import type { Result } from "@cortex/core";
 
 /** Execution context passed to every tool handler. */
 export interface ToolExecutionContext {

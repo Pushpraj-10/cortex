@@ -1,4 +1,4 @@
-import type { Result } from "@cortex/shared";
+import type { Result } from "@cortex/core";
 import type { ContextFragment, ContextRequest } from "../types.js";
 
 /** Base interface for context providers. Concrete providers (workspace overview, mentioned files, ...) implement this. */

@@ -53,37 +53,37 @@ describe("buildImportGraph", () => {
     it("resolves a package import to that package's entry point, across package boundaries", () => {
       const graph = buildImportGraph(
         new Map([
-          ["packages/shared/package.json", manifest("@cortex/shared", "src/index.ts")],
-          ["packages/shared/src/index.ts", source()],
-          ["packages/agent/src/loop.ts", source("@cortex/shared")],
-          ["packages/llm/src/client.ts", source("@cortex/shared")],
+          ["packages/core/package.json", manifest("@cortex/core", "src/index.ts")],
+          ["packages/core/src/index.ts", source()],
+          ["packages/agent/src/loop.ts", source("@cortex/core")],
+          ["packages/providers/src/client.ts", source("@cortex/core")],
         ]),
       );
 
-      expect(graph.forward.get("packages/agent/src/loop.ts")).toEqual(["packages/shared/src/index.ts"]);
-      expect(graph.reverse.get("packages/shared/src/index.ts")).toEqual([
+      expect(graph.forward.get("packages/agent/src/loop.ts")).toEqual(["packages/core/src/index.ts"]);
+      expect(graph.reverse.get("packages/core/src/index.ts")).toEqual([
         "packages/agent/src/loop.ts",
-        "packages/llm/src/client.ts",
+        "packages/providers/src/client.ts",
       ]);
     });
 
     it("resolves a subpath import to the file under the package directory", () => {
       const graph = buildImportGraph(
         new Map([
-          ["packages/shared/package.json", manifest("@cortex/shared", "src/index.ts")],
-          ["packages/shared/utils/ids.ts", source()],
-          ["app/main.ts", source("@cortex/shared/utils/ids")],
+          ["packages/core/package.json", manifest("@cortex/core", "src/index.ts")],
+          ["packages/core/utils/ids.ts", source()],
+          ["app/main.ts", source("@cortex/core/utils/ids")],
         ]),
       );
 
-      expect(graph.forward.get("app/main.ts")).toEqual(["packages/shared/utils/ids.ts"]);
+      expect(graph.forward.get("app/main.ts")).toEqual(["packages/core/utils/ids.ts"]);
     });
 
     it("ignores third-party and built-in imports", () => {
       const graph = buildImportGraph(
         new Map([
-          ["packages/shared/package.json", manifest("@cortex/shared", "src/index.ts")],
-          ["packages/shared/src/index.ts", source()],
+          ["packages/core/package.json", manifest("@cortex/core", "src/index.ts")],
+          ["packages/core/src/index.ts", source()],
           ["a.ts", source("react", "node:fs", "lodash/fp")],
         ]),
       );
@@ -105,15 +105,15 @@ describe("buildImportGraph", () => {
     it("lets a change ripple from a leaf package's file out through other packages", () => {
       const graph = buildImportGraph(
         new Map([
-          ["packages/shared/package.json", manifest("@cortex/shared", "src/index.ts")],
-          ["packages/shared/src/index.ts", source("./result.js")],
-          ["packages/shared/src/result.ts", source()],
-          ["packages/agent/src/loop.ts", source("@cortex/shared")],
+          ["packages/core/package.json", manifest("@cortex/core", "src/index.ts")],
+          ["packages/core/src/index.ts", source("./result.js")],
+          ["packages/core/src/result.ts", source()],
+          ["packages/agent/src/loop.ts", source("@cortex/core")],
         ]),
       );
 
-      expect(graph.reverse.get("packages/shared/src/result.ts")).toEqual(["packages/shared/src/index.ts"]);
-      expect(graph.reverse.get("packages/shared/src/index.ts")).toEqual(["packages/agent/src/loop.ts"]);
+      expect(graph.reverse.get("packages/core/src/result.ts")).toEqual(["packages/core/src/index.ts"]);
+      expect(graph.reverse.get("packages/core/src/index.ts")).toEqual(["packages/agent/src/loop.ts"]);
     });
   });
 

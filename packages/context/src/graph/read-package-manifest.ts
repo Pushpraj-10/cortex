@@ -1,5 +1,5 @@
 import { promises as fs } from "node:fs";
-import { resolveWorkspacePath } from "@cortex/shared";
+import { resolveWorkspacePath } from "@cortex/core";
 
 export interface PackageManifest {
   name: string;

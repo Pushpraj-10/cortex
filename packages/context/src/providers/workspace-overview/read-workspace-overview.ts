@@ -1,5 +1,5 @@
 import { promises as fs } from "node:fs";
-import { ok, err, resolveWorkspacePath, type Result } from "@cortex/shared";
+import { ok, err, resolveWorkspacePath, type Result } from "@cortex/core";
 import { WorkspaceOverviewProviderError } from "./errors.js";
 import type { WorkspaceOverviewData } from "./format-overview.js";
 import { IGNORED_NAMES } from "../../workspace/ignored-names.js";

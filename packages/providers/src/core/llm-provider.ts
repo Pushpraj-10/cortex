@@ -1,5 +1,5 @@
 import type { ChatMessage, ChatRequest } from "../types.js";
-import type { Result } from "@cortex/shared";
+import type { Result } from "@cortex/core";
 
 /** Base interface for LLM providers. Concrete providers (Ollama, Claude, etc.) implement this. */
 export interface LLMProvider {

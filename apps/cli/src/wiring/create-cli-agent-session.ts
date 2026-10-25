@@ -1,5 +1,5 @@
-import { ok, type Result } from "@cortex/shared";
-import { getProvider } from "@cortex/llm";
+import { ok, type Result } from "@cortex/core";
+import { getProvider } from "@cortex/providers";
 import { createAgentSession, createToolsExecutor, type AgentSession } from "@cortex/agent";
 import { resolveOllamaConfig } from "./resolve-ollama-config.js";
 import { resolveGroqConfig } from "./resolve-groq-config.js";
@@ -18,7 +18,7 @@ export interface CliAgentSession {
  *
  * Provider choice: Groq when GROQ_API_KEY is set (cloud, for fast iteration), Ollama
  * otherwise (local, no key needed) — the CLI's one deliberate piece of provider
- * selection logic, kept here rather than in @cortex/llm so the library stays
+ * selection logic, kept here rather than in @cortex/providers so the library stays
  * mechanism-only.
  */
 export function createCliAgentSession(cwd: string): Result<CliAgentSession> {

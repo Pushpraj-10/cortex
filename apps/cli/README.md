@@ -40,7 +40,7 @@ dependency of this package) transpiles on the fly. **Note:** `loadDotEnv()` read
 as real env vars for that case instead of relying on a `.env` file.
 
 **Ctrl+C** exits. **Esc** while thinking aborts the in-flight request (a real
-`AbortSignal`, threaded through `@cortex/llm`'s `fetch` call — not just a UI-level
+`AbortSignal`, threaded through `@cortex/providers`'s `fetch` call — not just a UI-level
 "stop showing output"). **Ctrl+T** toggles the most recent tool-call block open/closed
 (a stand-in for real per-item expand/collapse, until there's a focus-navigation
 system).
@@ -130,7 +130,7 @@ instead of showing a spurious error bubble.
   the 10 file-system tool handlers don't pass `context.signal` into their own
   `fs.promises` calls, so an in-flight file operation isn't itself interrupted (file
   ops are fast enough that this is low-value in practice).
-- **No streaming.** `@cortex/llm` is request/response, not token-by-token.
+- **No streaming.** `@cortex/providers` is request/response, not token-by-token.
 - **Only Ollama.** The provider registry supports adding more without changing this
   package's own code, but nothing else is registered yet.
 - **No build step.** `bin.cortex` runs `src/index.ts` straight through `tsx`,

@@ -10,8 +10,8 @@ export interface WorkspacePackage {
 }
 
 /**
- * Lists, in preference order, the workspace files a bare specifier such as `@cortex/shared`
- * or `@cortex/shared/sub` could refer to, given the workspace's packages by name: the
+ * Lists, in preference order, the workspace files a bare specifier such as `@cortex/core`
+ * or `@cortex/core/sub` could refer to, given the workspace's packages by name: the
  * package's entry point for the bare name, or the file under the package directory for a
  * subpath. Empty when the specifier isn't one of the workspace's own packages (a third-party
  * dependency or a built-in). Pure — the caller checks which candidate exists.

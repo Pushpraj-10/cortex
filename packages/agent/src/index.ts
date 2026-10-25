@@ -1,6 +1,6 @@
 /**
  * @cortex/agent — the chat + native-tool-calling loop that drives a coding session.
- * Wires @cortex/llm (the model), @cortex/tools (what it can do), and @cortex/prompts
+ * Wires @cortex/providers (the model), @cortex/tools (what it can do), and @cortex/prompts
  * (its system prompt) together; nothing here talks to a specific provider or tool.
  */
 

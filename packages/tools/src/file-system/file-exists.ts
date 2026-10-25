@@ -1,5 +1,5 @@
 import { promises as fs } from "node:fs";
-import { ok, resolveWorkspacePath, type Result } from "@cortex/shared";
+import { ok, resolveWorkspacePath, type Result } from "@cortex/core";
 import type { ToolDefinition, ToolExecutionContext } from "../types.js";
 
 interface FileExistsArgs {

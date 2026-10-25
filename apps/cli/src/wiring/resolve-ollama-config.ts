@@ -1,5 +1,5 @@
-import { CortexError, ok, err, type Result } from "@cortex/shared";
-import type { OllamaConfig } from "@cortex/llm";
+import { CortexError, ok, err, type Result } from "@cortex/core";
+import type { OllamaConfig } from "@cortex/providers";
 
 export class MissingOllamaModelError extends CortexError {
   constructor() {

@@ -17,8 +17,8 @@ describe("readPackageManifest", () => {
   const write = (content: string) => fs.writeFile(path.join(tempDir, "package.json"), content);
 
   it("reads the name and main", async () => {
-    await write(JSON.stringify({ name: "@cortex/shared", main: "src/index.ts" }));
-    expect(await readPackageManifest(tempDir, "package.json")).toEqual({ name: "@cortex/shared", main: "src/index.ts" });
+    await write(JSON.stringify({ name: "@cortex/core", main: "src/index.ts" }));
+    expect(await readPackageManifest(tempDir, "package.json")).toEqual({ name: "@cortex/core", main: "src/index.ts" });
   });
 
   it("falls back to module, then types, when there is no main", async () => {

@@ -24,7 +24,7 @@ moved, not generic ("Move e2e scripts into tests/", not "Reorganize tests").
 **Body** — bullet points explaining what changed and, where it isn't obvious
 from the title, why. Reference concrete paths/functions rather than restating
 the diff in prose. Close with a one-line test/typecheck status when tests were
-added or run (e.g. `15 new tests across @cortex/llm and @cortex/cli, full
+added or run (e.g. `15 new tests across @cortex/providers and @cortex/cli, full
 typecheck clean`).
 
 **No AI attribution trailer.** Commits in this repo do not carry a

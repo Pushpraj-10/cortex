@@ -1,4 +1,4 @@
-import type { Logger } from "@cortex/shared";
+import type { Logger } from "@cortex/core";
 import type { ContextProvider } from "./context-provider.js";
 import type { ContextRequest } from "../types.js";
 

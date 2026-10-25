@@ -4,7 +4,7 @@ The catalogue of actions the agent can invoke (read/write files, run shell comma
 search, etc.). A tool is defined once as a `ToolDefinition` and registered; nothing
 else in the system needs to know how a given tool is implemented, only its name and
 schema. `@cortex/execution` is the only package that should actually invoke a tool's
-handler. This package depends on nothing but `@cortex/shared` — it doesn't reach into
+handler. This package depends on nothing but `@cortex/core` — it doesn't reach into
 any other package (e.g. a repository/context abstraction) just to reuse a capability,
 so it stays usable entirely on its own.
 
@@ -17,7 +17,7 @@ so it stays usable entirely on its own.
 - `registerTool(definition)` / `getTool(name)` / `listTools()`.
 - `filesystemTools` — `list_files`, `read_file`, `search_files`, `write_file`,
   `edit_file`, `apply_patch`. Each talks to `node:fs` directly, scoped by
-  `resolveWorkspacePath` (from `@cortex/shared`) against the `cwd` on the
+  `resolveWorkspacePath` (from `@cortex/core`) against the `cwd` on the
   `ToolExecutionContext` passed to that call — no injected repository or other
   cross-package dependency. `apply_patch` takes a unified diff (git-style,
   `@@ -a,b +c,d @@` hunks) instead of a full file or a single string replacement, so

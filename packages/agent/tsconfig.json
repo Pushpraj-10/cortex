@@ -5,10 +5,9 @@
     "outDir": "dist"
   },
   "references": [
-    { "path": "../shared" },
-    { "path": "../llm" },
+    { "path": "../core" },
+    { "path": "../providers" },
     { "path": "../tools" },
-    { "path": "../prompts" },
     { "path": "../context" },
   ],
   "include": ["src", "test"]

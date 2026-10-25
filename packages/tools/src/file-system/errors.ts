@@ -1,4 +1,4 @@
-import { CortexError } from "@cortex/shared";
+import { CortexError } from "@cortex/core";
 
 export class FileSystemToolError extends CortexError {
   constructor(message: string) {

@@ -6,6 +6,6 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "dependencies": {
-    "@cortex/shared": "*"
+    "@cortex/core": "*"
   }
 }

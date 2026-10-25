@@ -20,17 +20,17 @@ describe("parseBlocks", () => {
   });
 
   it("parses a pipe table into rows, dropping the dashed separator row", () => {
-    const blocks = parseBlocks("| Path | Description |\n|------|-------------|\n| packages/llm | Chat layer |");
+    const blocks = parseBlocks("| Path | Description |\n|------|-------------|\n| packages/providers | Chat layer |");
     expect(blocks).toEqual([
-      { type: "table", rows: [["Path", "Description"], ["packages/llm", "Chat layer"]] },
+      { type: "table", rows: [["Path", "Description"], ["packages/providers", "Chat layer"]] },
     ]);
   });
 
   it("does not splice a table row into the middle of a flattened paragraph", () => {
-    const blocks = parseBlocks("Workspace layout:\n| Path | Description |\n| packages/llm | Chat layer |\nDone.");
+    const blocks = parseBlocks("Workspace layout:\n| Path | Description |\n| packages/providers | Chat layer |\nDone.");
     expect(blocks).toEqual([
       { type: "paragraph", text: "Workspace layout:" },
-      { type: "table", rows: [["Path", "Description"], ["packages/llm", "Chat layer"]] },
+      { type: "table", rows: [["Path", "Description"], ["packages/providers", "Chat layer"]] },
       { type: "paragraph", text: "Done." },
     ]);
   });

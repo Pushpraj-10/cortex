@@ -1,4 +1,4 @@
-# @cortex/shared
+# @cortex/core
 
 Cross-cutting vocabulary every other package builds on: a `Result` type for fallible
 operations, a `CortexError` base class, a minimal `Logger` interface, and id

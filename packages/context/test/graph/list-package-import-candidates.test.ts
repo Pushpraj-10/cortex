@@ -5,20 +5,20 @@ import {
 } from "../../src/graph/list-package-import-candidates.js";
 
 const packages = new Map<string, WorkspacePackage>([
-  ["@cortex/shared", { manifest: "packages/shared/package.json", main: "src/index.ts" }],
+  ["@cortex/core", { manifest: "packages/core/package.json", main: "src/index.ts" }],
   ["@cortex/bare", { manifest: "packages/bare/package.json" }],
   ["rootpkg", { manifest: "package.json", main: "index.js" }],
 ]);
 
 describe("listPackageImportCandidates", () => {
   it("points a bare package name at the package's entry point", () => {
-    expect(listPackageImportCandidates("@cortex/shared", packages)[0]).toBe("packages/shared/src/index.ts");
+    expect(listPackageImportCandidates("@cortex/core", packages)[0]).toBe("packages/core/src/index.ts");
   });
 
   it("points a subpath at the file under the package directory", () => {
-    const candidates = listPackageImportCandidates("@cortex/shared/utils/ids", packages);
-    expect(candidates[0]).toBe("packages/shared/utils/ids");
-    expect(candidates).toContain("packages/shared/utils/ids.ts");
+    const candidates = listPackageImportCandidates("@cortex/core/utils/ids", packages);
+    expect(candidates[0]).toBe("packages/core/utils/ids");
+    expect(candidates).toContain("packages/core/utils/ids.ts");
   });
 
   it("handles a package whose manifest sits at the workspace root", () => {

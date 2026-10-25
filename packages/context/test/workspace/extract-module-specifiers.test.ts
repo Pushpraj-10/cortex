@@ -5,7 +5,7 @@ describe("extractModuleSpecifiers", () => {
   it("returns relative, package and built-in specifiers alike, in order", () => {
     const source = [
       `import fs from "node:fs";`,
-      `import { ok } from "@cortex/shared";`,
+      `import { ok } from "@cortex/core";`,
       `import { b } from "./b.js";`,
       `export { c } from "../c.js";`,
       `const d = require("lodash");`,
@@ -14,7 +14,7 @@ describe("extractModuleSpecifiers", () => {
 
     expect(extractModuleSpecifiers(source)).toEqual([
       "node:fs",
-      "@cortex/shared",
+      "@cortex/core",
       "./b.js",
       "../c.js",
       "lodash",

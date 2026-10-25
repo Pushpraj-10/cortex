@@ -10,10 +10,9 @@
     "ink": "^5.0.1",
     "react": "^18.3.1",
     "tsx": "^4.19.1",
-    "@cortex/shared": "*",
-    "@cortex/llm": "*",
+    "@cortex/core": "*",
+    "@cortex/providers": "*",
     "@cortex/tools": "*",
-    "@cortex/prompts": "*",
     "@cortex/context": "*",
     "@cortex/agent": "*"
   },

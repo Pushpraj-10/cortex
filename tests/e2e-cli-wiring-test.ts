@@ -119,7 +119,7 @@ async function main() {
     await cleanup(workspaceRoot);
     process.exit(1);
   }
-  log("STAGE 5 OK: abort propagated through @cortex/llm's fetch call and surfaced correctly");
+  log("STAGE 5 OK: abort propagated through @cortex/providers's fetch call and surfaced correctly");
 
   await cleanup(workspaceRoot);
 

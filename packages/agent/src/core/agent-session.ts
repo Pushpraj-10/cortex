@@ -1,7 +1,7 @@
-import { chatSystemTemplate } from "@cortex/prompts";
+import { buildSystemPrompt } from "./system-prompt.js";
 import { listTools } from "@cortex/tools";
 import { gatherContext } from "@cortex/context";
-import type { ChatMessage } from "@cortex/llm";
+import type { ChatMessage } from "@cortex/providers";
 import type { AgentConfig, AgentEvent, AgentSession } from "../types.js";
 import { runToolLoop } from "./tool-loop.js";
 import { toToolSpec } from "./to-tool-spec.js";
@@ -13,7 +13,7 @@ import { toToolSpec } from "./to-tool-spec.js";
  */
 export function createAgentSession(config: AgentConfig): AgentSession {
   const history: ChatMessage[] = [
-    { role: "system", content: chatSystemTemplate.render({ workspaceRoot: config.workspaceRoot }) },
+    { role: "system", content: buildSystemPrompt(config.workspaceRoot) },
   ];
 
   return {

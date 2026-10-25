@@ -5,7 +5,7 @@ describe("isIndexedFile", () => {
   it("accepts source files and package.json at any depth", () => {
     expect(isIndexedFile("src/a.ts")).toBe(true);
     expect(isIndexedFile("package.json")).toBe(true);
-    expect(isIndexedFile("packages/shared/package.json")).toBe(true);
+    expect(isIndexedFile("packages/core/package.json")).toBe(true);
   });
 
   it("rejects other files, including other JSON", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ok } from "@cortex/shared";
+import { ok } from "@cortex/core";
 import { selectProviders } from "../../src/core/select-providers.js";
 import type { ContextProvider } from "../../src/core/context-provider.js";
 

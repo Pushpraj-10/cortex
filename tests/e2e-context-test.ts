@@ -12,7 +12,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-import { createOllamaClient } from "../packages/llm/src/ollama/client.js";
+import { createOllamaClient } from "../packages/providers/src/ollama/client.js";
 import { registerProvider as registerContextProvider, workspaceOverviewProvider } from "../packages/context/src/index.js";
 import { createAgentSession } from "../packages/agent/src/index.js";
 import type { AgentEvent, Executor } from "../packages/agent/src/index.js";

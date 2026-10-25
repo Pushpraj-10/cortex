@@ -1,5 +1,5 @@
 /**
- * @cortex/shared — cross-cutting types and helpers used by every other package.
+ * @cortex/core — cross-cutting types and helpers used by every other package.
  * This package must not depend on any other `@cortex/*` package.
  */
 import path from "node:path";

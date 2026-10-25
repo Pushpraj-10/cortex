@@ -1,17 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { chatSystemTemplate } from "../../src/templates/chat-system.js";
+import { buildSystemPrompt } from "../../src/core/system-prompt.js";
 
-describe("chatSystemTemplate", () => {
-  it("has the expected id", () => {
-    expect(chatSystemTemplate.id).toBe("chat-system");
-  });
-
+describe("buildSystemPrompt", () => {
   it("interpolates the workspace root", () => {
-    expect(chatSystemTemplate.render({ workspaceRoot: "/repo" })).toContain("/repo");
+    expect(buildSystemPrompt("/repo")).toContain("/repo");
   });
 
   it("prefers edit_file over write_file for existing files, and doesn't mention apply_patch", () => {
-    const rendered = chatSystemTemplate.render({ workspaceRoot: "/repo" });
+    const rendered = buildSystemPrompt("/repo");
     expect(rendered).toContain("edit_file");
     expect(rendered).toContain("write_file");
     expect(rendered).not.toContain("apply_patch");
@@ -23,19 +19,17 @@ describe("chatSystemTemplate", () => {
       "sometimes described an intended call as markdown-fenced JSON inside its own answer " +
       "instead of actually invoking one)",
     () => {
-      const rendered = chatSystemTemplate.render({ workspaceRoot: "/repo" });
+      const rendered = buildSystemPrompt("/repo");
       expect(rendered).toMatch(/tool-calling mechanism/i);
       expect(rendered).toMatch(/never describe|narrate/i);
     },
   );
 
   it("instructs preservation of existing code over placeholder stubs", () => {
-    const rendered = chatSystemTemplate.render({ workspaceRoot: "/repo" });
-    expect(rendered).toMatch(/your code here/i);
+    expect(buildSystemPrompt("/repo")).toMatch(/your code here/i);
   });
 
   it("instructs against creating companion files", () => {
-    const rendered = chatSystemTemplate.render({ workspaceRoot: "/repo" });
-    expect(rendered).toMatch(/companion file/i);
+    expect(buildSystemPrompt("/repo")).toMatch(/companion file/i);
   });
 });

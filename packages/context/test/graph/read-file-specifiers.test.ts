@@ -17,9 +17,9 @@ describe("readFileSpecifiers", () => {
   it("returns every module specifier in a file, package imports included", async () => {
     await fs.writeFile(
       path.join(tempDir, "a.ts"),
-      `import { b } from "./b.js";\nimport { ok } from "@cortex/shared";\nimport fs from "node:fs";\n`,
+      `import { b } from "./b.js";\nimport { ok } from "@cortex/core";\nimport fs from "node:fs";\n`,
     );
-    expect(await readFileSpecifiers(tempDir, "a.ts")).toEqual(["./b.js", "@cortex/shared", "node:fs"]);
+    expect(await readFileSpecifiers(tempDir, "a.ts")).toEqual(["./b.js", "@cortex/core", "node:fs"]);
   });
 
   it("returns [] for a missing file instead of throwing", async () => {

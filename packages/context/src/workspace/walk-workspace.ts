@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { resolveWorkspacePath } from "@cortex/shared";
+import { resolveWorkspacePath } from "@cortex/core";
 import { IGNORED_NAMES } from "./ignored-names.js";
 
 const DEFAULT_MAX_DEPTH = 6;

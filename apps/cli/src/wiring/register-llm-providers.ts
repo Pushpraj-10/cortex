@@ -1,4 +1,4 @@
-import { registerProvider, ollamaProviderDescriptor, groqProviderDescriptor } from "@cortex/llm";
+import { registerProvider, ollamaProviderDescriptor, groqProviderDescriptor } from "@cortex/providers";
 
 /** Registers every LLM provider descriptor this CLI can use. Call once, at startup. */
 export function registerLlmProviders(): void {

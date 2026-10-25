@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { registerTool } from "@cortex/tools";
-import { ok, err, CortexError } from "@cortex/shared";
+import { ok, err, CortexError } from "@cortex/core";
 import { createToolsExecutor } from "../../src/core/tools-executor.js";
 
 describe("createToolsExecutor", () => {

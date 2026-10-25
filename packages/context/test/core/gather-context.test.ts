@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ok, err, CortexError } from "@cortex/shared";
+import { ok, err, CortexError } from "@cortex/core";
 import { gatherContext } from "../../src/core/gather-context.js";
 import type { ContextProvider } from "../../src/core/context-provider.js";
 

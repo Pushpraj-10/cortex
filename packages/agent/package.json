@@ -6,10 +6,9 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "dependencies": {
-    "@cortex/shared": "*",
-    "@cortex/llm": "*",
+    "@cortex/core": "*",
+    "@cortex/providers": "*",
     "@cortex/tools": "*",
-    "@cortex/prompts": "*",
     "@cortex/context": "*"
   }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ok } from "@cortex/shared";
+import { ok } from "@cortex/core";
 import { registerProvider, getProvider, listProviders, UnknownProviderError } from "../../src/core/provider-registry.js";
 import type { ContextProvider } from "../../src/core/context-provider.js";
 

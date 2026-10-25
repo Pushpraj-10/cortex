@@ -1,4 +1,4 @@
-import type { ChatMessage, LLMProvider, ToolSpec } from "@cortex/llm";
+import type { ChatMessage, LLMProvider, ToolSpec } from "@cortex/providers";
 import type { AgentEvent, Executor } from "../types.js";
 
 // 8 proved too tight in real sessions: a find → read → edit → verify task can spend

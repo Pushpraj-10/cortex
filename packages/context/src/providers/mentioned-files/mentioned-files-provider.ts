@@ -1,4 +1,4 @@
-import { ok } from "@cortex/shared";
+import { ok } from "@cortex/core";
 import type { ContextProvider } from "../../core/context-provider.js";
 import type { ContextFragment } from "../../types.js";
 import { extractFileMentions } from "../../workspace/extract-file-mentions.js";

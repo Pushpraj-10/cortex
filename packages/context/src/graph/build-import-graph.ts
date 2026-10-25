@@ -5,7 +5,7 @@ import type { ImportGraph, ImportIndex } from "./types.js";
 /**
  * Resolves every indexed file's import specifiers against the files in the index and
  * returns the edges in both directions. Relative imports resolve by path; bare imports
- * (`@cortex/shared`) resolve only if they name one of the workspace's own packages, found via
+ * (`@cortex/core`) resolve only if they name one of the workspace's own packages, found via
  * its `package.json`, and land on that package's entry point — which is what lets a change
  * ripple across package boundaries. Resolution is a set lookup per candidate — no IO — so
  * it stays cheap enough to redo on every turn. Imports that don't land on an indexed file

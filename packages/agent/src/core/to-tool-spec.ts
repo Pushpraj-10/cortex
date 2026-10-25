@@ -1,8 +1,8 @@
-import type { ToolSpec } from "@cortex/llm";
+import type { ToolSpec } from "@cortex/providers";
 import type { ToolDefinition } from "@cortex/tools";
 
 /**
- * Maps a registered @cortex/tools definition to the ToolSpec shape @cortex/llm's
+ * Maps a registered @cortex/tools definition to the ToolSpec shape @cortex/providers's
  * native tool-calling contract expects. ToolDefinition.parametersSchema is already
  * real JSON Schema, so this is a plain field rename, not new schema work.
  */

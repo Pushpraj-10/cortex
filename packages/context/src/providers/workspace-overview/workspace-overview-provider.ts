@@ -1,4 +1,4 @@
-import { ok } from "@cortex/shared";
+import { ok } from "@cortex/core";
 import type { ContextProvider } from "../../core/context-provider.js";
 import { formatOverview } from "./format-overview.js";
 import { readWorkspaceOverview } from "./read-workspace-overview.js";

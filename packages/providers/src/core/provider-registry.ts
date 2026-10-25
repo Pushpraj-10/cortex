@@ -1,4 +1,4 @@
-import { CortexError } from "@cortex/shared";
+import { CortexError } from "@cortex/core";
 import type { LLMProviderDescriptor } from "./llm-provider-descriptor.js";
 
 export class UnknownProviderError extends CortexError {

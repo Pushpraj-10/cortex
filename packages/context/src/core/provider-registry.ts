@@ -1,4 +1,4 @@
-import { CortexError } from "@cortex/shared";
+import { CortexError } from "@cortex/core";
 import type { ContextProvider } from "./context-provider.js";
 
 export class UnknownProviderError extends CortexError {

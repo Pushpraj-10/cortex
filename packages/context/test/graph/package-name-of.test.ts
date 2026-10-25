@@ -5,8 +5,8 @@ describe("packageNameOf", () => {
   it.each([
     ["lodash", "lodash"],
     ["lodash/fp", "lodash"],
-    ["@cortex/shared", "@cortex/shared"],
-    ["@cortex/shared/sub/path", "@cortex/shared"],
+    ["@cortex/core", "@cortex/core"],
+    ["@cortex/core/sub/path", "@cortex/core"],
   ])("maps %s to %s", (specifier, expected) => {
     expect(packageNameOf(specifier)).toBe(expected);
   });

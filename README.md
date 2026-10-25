@@ -60,7 +60,7 @@ each package's own `README.md` for its actual contract.
 
 ## Extending
 
-- **New LLM provider**: add `packages/llm/src/providers/<name>/`, exporting a
+- **New LLM provider**: add `packages/providers/src/providers/<name>/`, exporting a
   `LLMProviderDescriptor`; register it in `apps/cli/src/wiring/registerLLMProvider.ts`.
 - **New tool**: add it under `packages/tools/src/filesystem/` or `shell/`, add it to
   the exported array; `apps/cli` picks it up automatically via `registerAllTools()`.

@@ -2,7 +2,7 @@
 
 The deep module that owns the agent loop: `Prompt -> Agent(Planning, Context
 Building, Reasoning, Tool Calls) -> task completion`, and nothing else. It composes
-`@cortex/llm` (talk to the model), `@cortex/context` (assemble what the model sees),
+`@cortex/providers` (talk to the model), `@cortex/context` (assemble what the model sees),
 `@cortex/prompts` (render what to say), `@cortex/tools`/`@cortex/execution` (act on
 what the model asks for) — with `@cortex/planner` wired in as a capability the loop
 calls on, not a stage it must pass through.
@@ -32,7 +32,7 @@ required step in `modes/chat.ts`.
 ## The tool-use loop (`src/internal/runToolLoop.ts`)
 
 Tool calls are native, not JSON-in-text. Every registered `@cortex/tools` definition
-is offered to the model as a `ToolSpec` (`toToolSpec`, via `@cortex/llm`'s
+is offered to the model as a `ToolSpec` (`toToolSpec`, via `@cortex/providers`'s
 `LLMRequest.tools`); the model's response carries structured `toolCalls` when it
 wants to invoke one (run via the configured `Executor`, result fed back, asked
 again), or plain `content` when it's giving its final answer, which ends the turn.

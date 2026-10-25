@@ -6,10 +6,9 @@
     "outDir": "dist"
   },
   "references": [
-    { "path": "../../packages/shared" },
-    { "path": "../../packages/llm" },
+    { "path": "../../packages/core" },
+    { "path": "../../packages/providers" },
     { "path": "../../packages/tools" },
-    { "path": "../../packages/prompts" },
     { "path": "../../packages/context" },
     { "path": "../../packages/agent" }
   ],

@@ -1,7 +1,5 @@
-import { createStringTemplate } from "../core/string-template.js";
-
 /**
- * The system prompt for the normal coding-agent chat loop. Vars: workspaceRoot.
+ * The system prompt for the normal coding-agent chat loop.
  *
  * The invariants below are not generic advice — each one names a failure observed in
  * a real session against a local 8B model, which otherwise: wrote `/** *\/` comments
@@ -15,10 +13,9 @@ import { createStringTemplate } from "../core/string-template.js";
  * invoking one — safe (nothing runs from narration) but useless (the task never gets
  * done).
  */
-export const chatSystemTemplate = createStringTemplate(
-  "chat-system",
-  [
-    "You are Cortex, a coding agent working in the repository rooted at {{workspaceRoot}}.",
+export function buildSystemPrompt(workspaceRoot: string): string {
+  return [
+    `You are Cortex, a coding agent working in the repository rooted at ${workspaceRoot}.`,
     "Understand the task, inspect the repository as needed, and make the minimum change",
     "that accomplishes it. Prefer edit_file for a targeted change to an existing file over",
     "rewriting it with write_file. Use write_file only to create a new file or when the",
@@ -40,5 +37,5 @@ export const chatSystemTemplate = createStringTemplate(
     "- Read a file before editing it, so your edit is based on its real contents.",
     "",
     "Explain what you changed and why once you are done.",
-  ].join("\n"),
-);
+  ].join("\n");
+}

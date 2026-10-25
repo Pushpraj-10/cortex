@@ -1,4 +1,4 @@
-import { err, ok, type Result } from "@cortex/shared";
+import { err, ok, type Result } from "@cortex/core";
 import type { ChatMessage, ChatRequest } from "../types.js";
 import type { LLMProvider } from "../core/llm-provider.js";
 import type { GroqConfig } from "./config.js";

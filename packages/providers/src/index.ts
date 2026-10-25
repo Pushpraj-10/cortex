@@ -1,5 +1,5 @@
 /**
- * @cortex/llm — provider-agnostic LLM access via a self-registering descriptor
+ * @cortex/providers — provider-agnostic LLM access via a self-registering descriptor
  * registry. Providers (Ollama, Claude, OpenAI, etc.) never appear as hardcoded
  * branches; each self-registers and the composition root controls what's active.
  */

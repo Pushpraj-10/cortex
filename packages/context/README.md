@@ -1,7 +1,7 @@
 # @cortex/context
 
 Assembles what the model sees about the workspace each turn, from independently registered
-`ContextProvider`s. It depends only on `@cortex/shared` and knows nothing about the agent loop:
+`ContextProvider`s. It depends only on `@cortex/core` and knows nothing about the agent loop:
 `@cortex/agent` calls `gatherContext(request)` and gets back one text block (or `""`).
 
 ## How a turn's context is built
@@ -52,8 +52,8 @@ every turn. `src/graph/` keeps an in-memory index per workspace for the life of 
   happens in `buildImportGraph` against the *current* file set using set lookups (no IO), so creating or
   deleting a file can never leave a stale edge.
 - **Cross-package imports are followed.** `package.json` files are indexed too (name + `main`/`module`/`types`),
-  so `import … from "@cortex/shared"` becomes an edge to that package's entry point (and
-  `@cortex/shared/sub` to the file under its directory). That's what lets an edit in a leaf package show
+  so `import … from "@cortex/core"` becomes an edge to that package's entry point (and
+  `@cortex/core/sub` to the file under its directory). That's what lets an edit in a leaf package show
   the packages that depend on it. Third-party and `node:` imports resolve to nothing and are dropped.
 - **Query** (`findDependents`): breadth-first over the reversed edges with a depth cap (3) and result cap (30),
   cycle-safe, sorted within a depth for stable output.

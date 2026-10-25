@@ -1,5 +1,5 @@
-import { CortexError, ok, err, type Result } from "@cortex/shared";
-import type { GroqConfig } from "@cortex/llm";
+import { CortexError, ok, err, type Result } from "@cortex/core";
+import type { GroqConfig } from "@cortex/providers";
 
 export class MissingGroqModelError extends CortexError {
   constructor() {

@@ -1,4 +1,4 @@
-# @cortex/llm
+# @cortex/providers
 
 Provider-agnostic access to chat-completion models. Providers (Ollama, Claude,
 OpenAI, Grok, ...) never appear as hardcoded branches in this package — each one

@@ -51,16 +51,16 @@ describe("dependentsProvider", () => {
   });
 
   it("follows package imports across the workspace's packages", async () => {
-    await write("packages/shared/package.json", JSON.stringify({ name: "@cortex/shared", main: "src/index.ts" }));
-    await write("packages/shared/src/index.ts", `export * from "./result.js";`);
-    await write("packages/shared/src/result.ts", "export const ok = 1;");
+    await write("packages/core/package.json", JSON.stringify({ name: "@cortex/core", main: "src/index.ts" }));
+    await write("packages/core/src/index.ts", `export * from "./result.js";`);
+    await write("packages/core/src/result.ts", "export const ok = 1;");
     await write("packages/agent/package.json", JSON.stringify({ name: "@cortex/agent", main: "src/index.ts" }));
-    await write("packages/agent/src/loop.ts", `import { ok } from "@cortex/shared";`);
+    await write("packages/agent/src/loop.ts", `import { ok } from "@cortex/core";`);
 
-    const result = await dependentsProvider.gather(request("change packages/shared/src/result.ts"));
+    const result = await dependentsProvider.gather(request("change packages/core/src/result.ts"));
 
     expect(result.ok && result.value[0]?.content).toBe(
-      "packages/shared/src/result.ts\n  imported by: packages/shared/src/index.ts\n  affected via 2 hops: packages/agent/src/loop.ts",
+      "packages/core/src/result.ts\n  imported by: packages/core/src/index.ts\n  affected via 2 hops: packages/agent/src/loop.ts",
     );
   });
 

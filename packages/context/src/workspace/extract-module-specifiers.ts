@@ -5,7 +5,7 @@ const MODULE_SPECIFIER = /(?:\b(?:import|export)\b[^'"`;]*?\bfrom\s*|\bimport\s*
 
 /**
  * Lists every module specifier a source file imports — relative (`./a.js`), package
- * (`@cortex/shared`) and built-in (`node:fs`) alike — in order of first appearance, without
+ * (`@cortex/core`) and built-in (`node:fs`) alike — in order of first appearance, without
  * duplicates. Pure; a regex scan rather than a parse, so an import inside a comment or string
  * can show up as a false positive.
  */

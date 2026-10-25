@@ -1,5 +1,5 @@
-import type { Result } from "@cortex/shared";
-import type { LLMProvider } from "@cortex/llm";
+import type { Result } from "@cortex/core";
+import type { LLMProvider } from "@cortex/providers";
 
 /** Runs a single tool call by name. Wraps whatever tool-running strategy the composition root wires in. */
 export interface Executor {

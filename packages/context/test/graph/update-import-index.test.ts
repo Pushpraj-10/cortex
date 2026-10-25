@@ -48,13 +48,13 @@ describe("updateImportIndex", () => {
   });
 
   it("indexes a package.json by its package name and entry point, with no specifiers", async () => {
-    await write("packages/shared/package.json", JSON.stringify({ name: "@cortex/shared", main: "src/index.ts" }));
+    await write("packages/core/package.json", JSON.stringify({ name: "@cortex/core", main: "src/index.ts" }));
     await write("tsconfig.json", "{}");
 
     const index = await updateImportIndex(tempDir);
 
-    expect(index.get("packages/shared/package.json")).toMatchObject({
-      packageName: "@cortex/shared",
+    expect(index.get("packages/core/package.json")).toMatchObject({
+      packageName: "@cortex/core",
       packageMain: "src/index.ts",
       specifiers: [],
     });
@@ -71,8 +71,8 @@ describe("updateImportIndex", () => {
   });
 
   it("records package imports as specifiers too", async () => {
-    await write("a.ts", `import { ok } from "@cortex/shared";`);
-    expect((await updateImportIndex(tempDir)).get("a.ts")?.specifiers).toEqual(["@cortex/shared"]);
+    await write("a.ts", `import { ok } from "@cortex/core";`);
+    expect((await updateImportIndex(tempDir)).get("a.ts")?.specifiers).toEqual(["@cortex/core"]);
   });
 
   it("reuses the previous record for a file that hasn't changed", async () => {

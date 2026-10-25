@@ -7,7 +7,7 @@
 export interface IndexedFile {
   mtimeMs: number;
   size: number;
-  /** For a source file: every module specifier it imports (`./a.js`, `@cortex/shared`, `node:fs`). Empty for a `package.json`. */
+  /** For a source file: every module specifier it imports (`./a.js`, `@cortex/core`, `node:fs`). Empty for a `package.json`. */
   specifiers: string[];
   /** For a `package.json`: its `name`, which makes the package importable by that name from elsewhere in the workspace. */
   packageName?: string;

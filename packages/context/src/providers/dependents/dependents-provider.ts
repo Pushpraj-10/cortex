@@ -1,4 +1,4 @@
-import { ok } from "@cortex/shared";
+import { ok } from "@cortex/core";
 import type { ContextProvider } from "../../core/context-provider.js";
 import { findDependents } from "../../graph/find-dependents.js";
 import { getImportGraph } from "../../graph/get-import-graph.js";

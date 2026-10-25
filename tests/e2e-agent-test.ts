@@ -1,5 +1,5 @@
 /**
- * End-to-end integration test: @cortex/agent driving @cortex/llm (Ollama) against
+ * End-to-end integration test: @cortex/agent driving @cortex/providers (Ollama) against
  * @cortex/tools' real file-system tools, in a throwaway workspace.
  *
  * Every stage logs before/after so a crash or hang points at exactly which package
@@ -15,7 +15,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-import { createOllamaClient } from "../packages/llm/src/ollama/client.js";
+import { createOllamaClient } from "../packages/providers/src/ollama/client.js";
 import {
   registerTool,
   readFileTool,
@@ -46,7 +46,7 @@ function log(stage: string, detail?: unknown) {
 
 async function main() {
   console.log("=".repeat(70));
-  console.log("E2E: @cortex/agent + @cortex/llm (Ollama) + @cortex/tools");
+  console.log("E2E: @cortex/agent + @cortex/providers (Ollama) + @cortex/tools");
   console.log(`Model: ${MODEL}  |  Base URL: ${BASE_URL}`);
   console.log("=".repeat(70) + "\n");
 

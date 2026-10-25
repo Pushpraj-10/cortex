@@ -1,6 +1,6 @@
 /**
- * The package a bare module specifier belongs to: `@cortex/shared/sub/path` is in
- * `@cortex/shared`, `lodash/fp` is in `lodash`. Returns `undefined` for relative specifiers
+ * The package a bare module specifier belongs to: `@cortex/core/sub/path` is in
+ * `@cortex/core`, `lodash/fp` is in `lodash`. Returns `undefined` for relative specifiers
  * and `node:` built-ins, which don't name a package.
  */
 export function packageNameOf(specifier: string): string | undefined {

@@ -31,7 +31,7 @@ describe("extractImports", () => {
   });
 
   it("ignores package imports", () => {
-    const source = `import fs from "node:fs";\nimport { ok } from "@cortex/shared";\nimport React from "react";`;
+    const source = `import fs from "node:fs";\nimport { ok } from "@cortex/core";\nimport React from "react";`;
     expect(extractImports(source)).toEqual([]);
   });
 

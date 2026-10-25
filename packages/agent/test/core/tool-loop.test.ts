@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { ok, err, CortexError, type Result } from "@cortex/shared";
-import type { ChatMessage, LLMProvider } from "@cortex/llm";
+import { ok, err, CortexError, type Result } from "@cortex/core";
+import type { ChatMessage, LLMProvider } from "@cortex/providers";
 import { runToolLoop } from "../../src/core/tool-loop.js";
 import type { Executor } from "../../src/types.js";
 

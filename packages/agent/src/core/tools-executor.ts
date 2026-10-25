@@ -1,5 +1,5 @@
 import { getTool } from "@cortex/tools";
-import type { Result } from "@cortex/shared";
+import type { Result } from "@cortex/core";
 import type { Executor } from "../types.js";
 
 /** Executor backed directly by @cortex/tools' registry — looks up and runs a tool by name. */

@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { ok, err, resolveWorkspacePath, type Result } from "@cortex/shared";
+import { ok, err, resolveWorkspacePath, type Result } from "@cortex/core";
 import type { ToolDefinition, ToolExecutionContext } from "../types.js";
 import { FileSystemToolError } from "./errors.js";
 

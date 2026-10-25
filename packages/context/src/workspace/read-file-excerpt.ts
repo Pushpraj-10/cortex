@@ -1,5 +1,5 @@
 import { promises as fs } from "node:fs";
-import { ok, err, resolveWorkspacePath, type Result } from "@cortex/shared";
+import { ok, err, resolveWorkspacePath, type Result } from "@cortex/core";
 import { WorkspaceReadError } from "./errors.js";
 
 const DEFAULT_MAX_CHARS = 4000;
