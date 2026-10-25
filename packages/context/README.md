@@ -31,7 +31,7 @@ To add one, implement `ContextProvider` (`id`, optional `applies`, `gather` retu
 
 ## Other modules
 
-- `workspace.ts` — walking the workspace, reading excerpts, finding and resolving file mentions, finding a file's tests; nothing here can read outside the root
+- `workspace.ts` — walking the workspace, reading excerpts, finding and resolving file mentions, finding a file's tests; nothing here can read outside the root. `walkWorkspace` (and the `IGNORED_NAMES` it skips) is exported for callers that need the file list itself, such as the CLI's `@file` completion
 - `imports.ts` — extracting import specifiers and resolving relative and `@scope/name` imports to candidate files
 - `graph.ts` — an import index refreshed incrementally (only files whose mtime or size changed are re-parsed), forward and reverse edges, and a bounded reverse-dependency search
 - `registry.ts`, `types.ts`

@@ -51,6 +51,35 @@ export function editFor(typed: string, key: EditingKey): TextEdit | "ignore" | u
   return undefined;
 }
 
+// ---- The `@file` menu's keys ----
+
+/** The parts of Ink's `Key` the menu looks at. */
+export interface MenuKey {
+  upArrow: boolean;
+  downArrow: boolean;
+  tab: boolean;
+  return: boolean;
+  escape: boolean;
+  shift: boolean;
+  meta: boolean;
+}
+
+export type MentionMenuAction = "previous" | "next" | "accept" | "dismiss";
+
+/**
+ * What a key does while the `@file` menu is open, or undefined when it is not for the menu (typing carries on). Tab always
+ * picks the highlighted file. Enter picks it only once something is typed after the `@`, so a lone `@` in a message
+ * ("meet @ 5pm") can still be sent; shift/alt+enter stay a newline.
+ */
+export function mentionMenuAction(key: MenuKey, query: string): MentionMenuAction | undefined {
+  if (key.upArrow) return "previous";
+  if (key.downArrow) return "next";
+  if (key.tab) return "accept";
+  if (key.return && !key.shift && !key.meta && query !== "") return "accept";
+  if (key.escape) return "dismiss";
+  return undefined;
+}
+
 // ---- Keys Ink's useInput does not report ----
 //
 // Ink parses Home and End but gives `useInput` no flag for them (the input is an empty string, the same as for Insert or

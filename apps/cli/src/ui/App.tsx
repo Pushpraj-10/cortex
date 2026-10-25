@@ -15,7 +15,9 @@ import { summarizeToolCall } from "../format/tool-calls.js";
 import { useChat } from "./hooks/useChat.js";
 import { useInputHistory } from "./hooks/useInputHistory.js";
 import { useProviderSetup } from "./hooks/useProviderSetup.js";
-import { editFor, useHomeEnd, type EdgeKey } from "./hooks/keys.js";
+import { activeMention, completeMention, rankFiles } from "../format/file-mentions.js";
+import { editFor, mentionMenuAction, useHomeEnd, type EdgeKey } from "./hooks/keys.js";
+import { useWorkspaceFiles } from "./hooks/useWorkspaceFiles.js";
 import { continueLine, moveToLineEnd, moveToLineStart, moveVertical, normalizePaste, useTextInput } from "./hooks/useTextInput.js";
 import { useAltScreen, useTerminalSize } from "./hooks/terminal.js";
 import { slashMenuRows, transcriptRows } from "./layout.js";
@@ -46,11 +48,13 @@ export interface AppProps {
   onThemeChange?(theme: ThemeName): void;
   /** Finds the current git branch for the footer; called at startup and after each turn. Omit to show none. */
   readBranch?(): string | undefined;
+  /** Lists the workspace's files (`/`-separated, relative) for the `@` menu; read when `@` is first typed. Omit to have no `@` menu. */
+  listFiles?(): Promise<string[]>;
 }
 
 const noBranch = () => undefined;
 
-export function App({ initialSession, newSession, policy, permissions, cwd, providers, version, initialTheme, onThemeChange, readBranch = noBranch }: AppProps) {
+export function App({ initialSession, newSession, policy, permissions, cwd, providers, version, initialTheme, onThemeChange, readBranch = noBranch, listFiles }: AppProps) {
   useAltScreen();
   const [themeName, setThemeName] = useState<ThemeName>(() => resolveThemeName(initialTheme, {}));
   const theme = getTheme(resolveThemeName(themeName));
@@ -83,6 +87,26 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
   useEffect(() => {
     setSlashIndex(0);
   }, [input.value]);
+
+  // `@` + letters at the cursor opens a menu of files; accepting one types its plain path, which the agent's context
+  // provider attaches to the turn. Esc closes it until the text changes.
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [mentionDismissedAt, setMentionDismissedAt] = useState<string | null>(null);
+  const mention = setup.stage === "idle" && !slashMenuOpen && !chat.isThinking ? activeMention(input.value, input.cursorOffset) : undefined;
+  const workspaceFiles = useWorkspaceFiles(listFiles, mention !== undefined, chat.isThinking);
+  const mentionQuery = mention?.query;
+  const mentionHidden = mentionDismissedAt === input.value;
+  const mentionMatches = useMemo(
+    () => (mentionQuery === undefined || mentionHidden ? [] : rankFiles(workspaceFiles, mentionQuery)),
+    [workspaceFiles, mentionQuery, mentionHidden],
+  );
+  const mentionItems = useMemo(() => mentionMatches.map((file) => ({ name: file, description: "" })), [mentionMatches]);
+  const mentionMenuOpen = mentionMatches.length > 0;
+  const clampedMentionIndex = Math.min(mentionIndex, Math.max(0, mentionMatches.length - 1));
+
+  useEffect(() => {
+    setMentionIndex(0);
+  }, [mentionQuery]);
 
   useEffect(() => {
     if (!providers.active()) chat.notify("No model provider is configured yet. Type /provider to set one up (an API key, or a local Ollama model).");
@@ -133,6 +157,12 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
 
   function acceptSlashCommand(command: SlashCommand) {
     input.set(`/${command.name} `);
+  }
+
+  function acceptMention(file: string) {
+    if (!mention) return;
+    const completed = completeMention(input.value, input.cursorOffset, mention, file);
+    input.set(completed.value, completed.cursor);
   }
 
   useInput(
@@ -208,6 +238,15 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
         }
       }
 
+      const menuAction = mentionMenuOpen ? mentionMenuAction(key, mentionQuery ?? "") : undefined;
+      if (menuAction) {
+        if (menuAction === "previous") setMentionIndex((i) => Math.max(0, i - 1));
+        else if (menuAction === "next") setMentionIndex((i) => Math.min(mentionMatches.length - 1, i + 1));
+        else if (menuAction === "accept") acceptMention(mentionMatches[clampedMentionIndex]!);
+        else setMentionDismissedAt(input.value);
+        return;
+      }
+
       if (key.return) {
         if (key.shift || key.meta) {
           input.insert("\n");
@@ -264,7 +303,9 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
     rows,
     inputValue: input.value,
     thinking: showThinking,
-    slashMenuRows: slashMenuRows(slashMenuOpen || pickerOpen, pickerOpen ? setup.menu.length : filteredCommands.length),
+    slashMenuRows: mentionMenuOpen
+      ? slashMenuRows(true, mentionMatches.length)
+      : slashMenuRows(slashMenuOpen || pickerOpen, pickerOpen ? setup.menu.length : filteredCommands.length),
     promptRows: request ? permissionPromptRows(chat.pendingPreview, maxPreviewLines) : setup.prompt ? SETUP_PROMPT_ROWS : 0,
   });
 
@@ -284,6 +325,7 @@ export function App({ initialSession, newSession, policy, permissions, cwd, prov
         {pickerOpen && <SlashCommandMenu commands={setup.menu} selectedIndex={setup.selectedIndex} prefix="" />}
         {setup.prompt && <SetupPrompt title={setup.prompt.title} label={setup.prompt.label} hint={setup.prompt.hint} error={setup.prompt.error} />}
         {slashMenuOpen && <SlashCommandMenu commands={filteredCommands} selectedIndex={clampedSlashIndex} />}
+        {mentionMenuOpen && <SlashCommandMenu commands={mentionItems} selectedIndex={clampedMentionIndex} prefix="" truncate="start" />}
         <InputBox value={input.value} cursorOffset={input.cursorOffset} mask={setup.prompt?.secret === true} placeholder={placeholder} />
         <StatusLine model={active ? `${active.model} (${active.provider})` : "no provider"} mode={mode} cwd={shownCwd} branch={branch} context={chat.context} />
       </Box>

@@ -8,9 +8,12 @@ interface SlashCommandMenuProps {
   selectedIndex: number;
   /** Shown before each name: "/" for commands; "" when the menu lists something else, like providers. */
   prefix?: string;
+  /** Which end of a line too long for the terminal is cut: the end for commands, the start for paths so the file name survives. */
+  truncate?: "end" | "start";
 }
 
-export function SlashCommandMenu({ commands, selectedIndex, prefix = "/" }: SlashCommandMenuProps) {
+/** A list of things to pick from. Every item is one row, which the layout counts on. An item with no description shows just its name. */
+export function SlashCommandMenu({ commands, selectedIndex, prefix = "/", truncate = "end" }: SlashCommandMenuProps) {
   const theme = useTheme();
   if (commands.length === 0) {
     return (
@@ -25,9 +28,9 @@ export function SlashCommandMenu({ commands, selectedIndex, prefix = "/" }: Slas
       {commands.map((command, i) => {
         const selected = i === selectedIndex;
         return (
-          <Text key={command.name} color={selected ? theme.primary : undefined} bold={selected}>
+          <Text key={command.name} color={selected ? theme.primary : undefined} bold={selected} wrap={truncate === "start" ? "truncate-start" : "truncate-end"}>
             {selected ? "› " : "  "}{prefix}{command.name}
-            <Text color={theme.muted}> — {command.description}</Text>
+            {command.description ? <Text color={theme.muted}> — {command.description}</Text> : null}
           </Text>
         );
       })}

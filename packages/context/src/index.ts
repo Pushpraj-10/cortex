@@ -8,6 +8,8 @@
 export type { ContextFragment, ContextProvider, ContextRequest } from "./types.js";
 export { registerContextProvider } from "./registry.js";
 export { gatherContext } from "./pipeline.js";
+export { walkWorkspace, IGNORED_NAMES } from "./workspace.js";
+export type { WalkWorkspaceOptions } from "./workspace.js";
 
 export { dependentsProvider } from "./providers/dependents.js";
 export { mentionedFilesProvider } from "./providers/mentioned-files.js";

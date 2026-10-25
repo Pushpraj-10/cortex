@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { edgeKeyOf, editFor, type EditingKey } from "../../../src/ui/hooks/keys.js";
+import { edgeKeyOf, editFor, mentionMenuAction, type EditingKey, type MenuKey } from "../../../src/ui/hooks/keys.js";
+
+const noMenuKey: MenuKey = { upArrow: false, downArrow: false, tab: false, return: false, escape: false, shift: false, meta: false };
+const menuKey = (flags: Partial<MenuKey>, query = "src") => mentionMenuAction({ ...noMenuKey, ...flags }, query);
 
 const noKey: EditingKey = { ctrl: false, meta: false, backspace: false, delete: false, leftArrow: false, rightArrow: false };
 const press = (typed: string, flags: Partial<EditingKey> = {}) => editFor(typed, { ...noKey, ...flags });
@@ -75,5 +78,38 @@ describe("editFor", () => {
     expect(press("")).toBeUndefined();
     expect(press("hello world")).toBeUndefined();
     expect(press("?")).toBeUndefined();
+  });
+});
+
+describe("mentionMenuAction", () => {
+  it("moves the highlight with up and down", () => {
+    expect(menuKey({ upArrow: true })).toBe("previous");
+    expect(menuKey({ downArrow: true })).toBe("next");
+  });
+
+  it("picks the highlighted file with tab, whatever has been typed", () => {
+    expect(menuKey({ tab: true })).toBe("accept");
+    expect(menuKey({ tab: true }, "")).toBe("accept");
+  });
+
+  it("picks it with enter once something is typed after the @", () => {
+    expect(menuKey({ return: true }, "s")).toBe("accept");
+  });
+
+  it("leaves enter alone after a bare @, so a message like 'meet @ 5pm' can still be sent", () => {
+    expect(menuKey({ return: true }, "")).toBeUndefined();
+  });
+
+  it("leaves shift+enter and alt+enter to start a new line", () => {
+    expect(menuKey({ return: true, shift: true })).toBeUndefined();
+    expect(menuKey({ return: true, meta: true })).toBeUndefined();
+  });
+
+  it("closes the menu with escape", () => {
+    expect(menuKey({ escape: true })).toBe("dismiss");
+  });
+
+  it("lets everything else through, so typing narrows the list", () => {
+    expect(menuKey({})).toBeUndefined();
   });
 });

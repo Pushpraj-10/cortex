@@ -5,6 +5,7 @@ import { loadPreferences, savePreferences } from "@cortex/config";
 import { App } from "./ui/App.js";
 import { USAGE, parseArgs } from "./cli/args.js";
 import { bootstrap } from "./runtime/bootstrap.js";
+import { listWorkspaceFiles } from "./runtime/workspace-files.js";
 import { loadDotEnv } from "./cli/env.js";
 import { runOnce } from "./cli/run-once.js";
 import { readGitBranch } from "./cli/git-branch.js";
@@ -47,6 +48,7 @@ const app = render(
     providers,
     version: readVersion(),
     readBranch: () => readGitBranch(cwd),
+    listFiles: () => listWorkspaceFiles(cwd),
     initialTheme: preferences.theme,
     // A theme that can't be remembered is not worth interrupting the session for.
     onThemeChange: (theme) => void savePreferences({ theme }).catch(() => undefined),
