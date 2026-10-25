@@ -50,7 +50,7 @@ describe("runToolLoop", () => {
     expect(executor.execute).toHaveBeenCalledWith("add_numbers", { a: 1, b: 2 }, undefined);
     expect(events).toEqual([
       { type: "toolCall", toolName: "add_numbers", args: { a: 1, b: 2 } },
-      { type: "toolResult", toolName: "add_numbers", output: 3 },
+      { type: "toolResult", toolName: "add_numbers", output: 3, ok: true },
       { type: "message", content: "The answer is 3" },
     ]);
   });
@@ -80,7 +80,32 @@ describe("runToolLoop", () => {
 
     const events = await collect(runToolLoop(history, { llm, executor, tools: [] }));
 
-    expect(events[1]).toEqual({ type: "toolResult", toolName: "bad_tool", output: { error: "tool failed" } });
+    expect(events[1]).toEqual({ type: "toolResult", toolName: "bad_tool", output: { error: "tool failed" }, ok: false });
+  });
+
+  it.each(["TOOL_DENIED", "TOOL_DECLINED", "TOOL_BLOCKED"])("marks a call refused by a decision (%s) as refused, not just failed", async (code) => {
+    const llm = llmReturning(
+      ok({ role: "assistant", content: "", toolCalls: [{ toolName: "edit_file", args: {} }] }),
+      ok({ role: "assistant", content: "ok" }),
+    );
+    const executor: Executor = { execute: vi.fn().mockResolvedValue(err(new CortexError("no", code))) };
+
+    const events = await collect(runToolLoop([{ role: "user", content: "x" }], { llm, executor, tools: [] }));
+
+    expect(events[1]).toEqual({ type: "toolResult", toolName: "edit_file", output: { error: "no" }, ok: false, refused: true });
+  });
+
+  it("does not mark an ordinary tool failure as refused", async () => {
+    const llm = llmReturning(
+      ok({ role: "assistant", content: "", toolCalls: [{ toolName: "read_file", args: {} }] }),
+      ok({ role: "assistant", content: "ok" }),
+    );
+    const executor: Executor = { execute: vi.fn().mockResolvedValue(err(new CortexError("ENOENT", "TOOL_FAILED"))) };
+
+    const events = await collect(runToolLoop([{ role: "user", content: "x" }], { llm, executor, tools: [] }));
+
+    expect(events[1]).not.toHaveProperty("refused");
+    expect(events[1]).toMatchObject({ ok: false });
   });
 
   it("yields a message and stops when the LLM request fails", async () => {
@@ -193,7 +218,7 @@ describe("runToolLoop: output size and compaction", () => {
 
     const events = await collect(runToolLoop(history, { llm, executor, tools: [] }));
 
-    expect(events[1]).toEqual({ type: "toolResult", toolName: "big_tool", output: huge });
+    expect(events[1]).toEqual({ type: "toolResult", toolName: "big_tool", output: huge, ok: true });
     const toolMessage = history.find((m) => m.role === "tool")!;
     expect(toolMessage.content.length).toBeLessThan(31_000);
     expect(toolMessage.content).toContain("[output truncated at 30000 characters]");

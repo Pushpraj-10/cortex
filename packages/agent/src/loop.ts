@@ -1,6 +1,6 @@
 import type { ChatMessage, LLMProvider, ToolSpec } from "@cortex/providers";
 import { compactHistory } from "./compaction.js";
-import type { AgentEvent, Executor } from "./types.js";
+import { REFUSAL_CODES, type AgentEvent, type Executor } from "./types.js";
 
 // 8 proved too tight in real sessions: a find → read → edit → verify task can spend
 // several turns just recovering from one wrong guess (a bad path, a rejected edit).
@@ -87,7 +87,8 @@ export async function* runToolLoop(
 
     const output = await deps.executor.execute(call.toolName, call.args, signal);
     const toolResultContent = output.ok ? output.value : { error: output.error.message };
-    yield { type: "toolResult", toolName: call.toolName, output: toolResultContent };
+    const refused = !output.ok && (REFUSAL_CODES as readonly string[]).includes((output.error as { code?: string }).code ?? "");
+    yield { type: "toolResult", toolName: call.toolName, output: toolResultContent, ok: output.ok, ...(refused ? { refused: true as const } : {}) };
 
     history.push({ role: "tool", name: call.toolName, content: truncate(JSON.stringify(toolResultContent)) });
   }

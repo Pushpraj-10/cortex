@@ -4,7 +4,7 @@
  * know tool names.
  */
 
-export type { ToolDefinition, ToolExecutionContext, ToolKind } from "./types.js";
+export type { ToolDefinition, ToolExecutionContext, ToolKind, ToolPreview } from "./types.js";
 export { ToolError, argText, defineTool } from "./define-tool.js";
 export { UnknownToolError, getTool, listTools, registerTool } from "./registry.js";
 export { builtinTools } from "./builtin-tools.js";

@@ -7,7 +7,7 @@
 import { CortexError, err, ok, type Result } from "@cortex/core";
 import { decidePermission, runHooks } from "@cortex/policy";
 import { getTool, listTools, UnknownToolError, type ToolDefinition } from "@cortex/tools";
-import type { AgentPolicy, Executor } from "./types.js";
+import type { AgentPolicy, Executor, RefusalCode } from "./types.js";
 
 // ---- Recovery hints --------------------------------------------------------------
 
@@ -26,7 +26,7 @@ export function addRecoveryHint(message: string): string {
 
 // ---- Executor --------------------------------------------------------------------
 
-function refusal(message: string, code: string): Result<never> {
+function refusal(message: string, code: RefusalCode | "TOOL_UNKNOWN"): Result<never> {
   return err(new CortexError(message, code));
 }
 

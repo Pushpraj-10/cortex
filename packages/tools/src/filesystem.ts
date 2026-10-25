@@ -104,6 +104,26 @@ export const getFileInfoTool = defineTool<
   },
 });
 
+// ---- previews --------------------------------------------------------------------
+
+/** Files bigger than this are not read just to draw a preview. */
+const MAX_PREVIEW_BYTES = 256 * 1024;
+/** Unchanged lines shown above and below an edit. */
+const PREVIEW_CONTEXT_LINES = 2;
+
+const newlines = (text: string) => text.split("\n").length - 1;
+
+/** A file's current text ("" and `exists: false` when it is not there yet); undefined when it is too big or unreadable. */
+async function readForPreview(resolved: string): Promise<{ text: string; exists: boolean } | undefined> {
+  try {
+    const stat = await fs.stat(resolved);
+    if (stat.size > MAX_PREVIEW_BYTES) return undefined;
+    return { text: await fs.readFile(resolved, "utf-8"), exists: true };
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "ENOENT" ? { text: "", exists: false } : undefined;
+  }
+}
+
 // ---- editing ---------------------------------------------------------------------
 
 export const writeFileTool = defineTool<{ path: string; content: string }, { success: boolean }>({
@@ -119,6 +139,16 @@ export const writeFileTool = defineTool<{ path: string; content: string }, { suc
     required: ["path", "content"],
   },
   summarize: (args) => `Write ${argText(args?.path)}`,
+  async preview(args, context) {
+    try {
+      if (typeof args?.path !== "string" || typeof args?.content !== "string") return undefined;
+      const current = await readForPreview(resolveWorkspacePath(context.cwd, args.path));
+      if (!current) return undefined;
+      return { kind: "diff", path: args.path, before: current.text, after: args.content, startLine: 1, ...(current.exists ? {} : { isNew: true }) };
+    } catch {
+      return undefined;
+    }
+  },
   failure: (args) => `Failed to write file at ${args.path}`,
   async run(args, context) {
     const resolved = resolveWorkspacePath(context.cwd, args.path);
@@ -145,6 +175,33 @@ export const editFileTool = defineTool<
     required: ["path", "oldString", "newString"],
   },
   summarize: (args) => `Edit ${argText(args?.path)}`,
+  async preview(args, context) {
+    try {
+      if (typeof args?.path !== "string" || typeof args?.oldString !== "string" || typeof args?.newString !== "string") return undefined;
+      const current = await readForPreview(resolveWorkspacePath(context.cwd, args.path));
+      if (!current?.exists) return undefined;
+      const at = current.text.indexOf(args.oldString);
+      if (at === -1) return undefined; // the edit will fail, and its own error says why
+
+      // The changed lines plus a little context, taken from the file as it is and as it will be.
+      const lines = current.text.split("\n");
+      const firstLine = newlines(current.text.slice(0, at));
+      const lastLine = firstLine + newlines(args.oldString);
+      const from = Math.max(0, firstLine - PREVIEW_CONTEXT_LINES);
+      const to = Math.min(lines.length - 1, lastLine + PREVIEW_CONTEXT_LINES);
+      const updated = current.text.slice(0, at) + args.newString + current.text.slice(at + args.oldString.length);
+      const shift = newlines(args.newString) - newlines(args.oldString);
+      return {
+        kind: "diff",
+        path: args.path,
+        before: lines.slice(from, to + 1).join("\n"),
+        after: updated.split("\n").slice(from, to + 1 + shift).join("\n"),
+        startLine: from + 1,
+      };
+    } catch {
+      return undefined;
+    }
+  },
   failure: (args) => `Failed to edit file at ${args.path}`,
   async run(args, context) {
     const resolved = resolveWorkspacePath(context.cwd, args.path);

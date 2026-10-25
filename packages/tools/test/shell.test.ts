@@ -40,3 +40,13 @@ describe("runCommandTool", () => {
     expect(runCommandTool.summarize!({ command: "x".repeat(100) })).toBe(`Run ${"x".repeat(80)}…`);
   });
 });
+
+describe("runCommandTool.preview", () => {
+  it("shows the command that is about to run", async () => {
+    expect(await runCommandTool.preview!({ command: "npm test" }, context)).toEqual({ kind: "command", command: "npm test" });
+  });
+
+  it("returns nothing for a call with no command, instead of throwing", async () => {
+    expect(await runCommandTool.preview!({} as { command: string }, context)).toBeUndefined();
+  });
+});

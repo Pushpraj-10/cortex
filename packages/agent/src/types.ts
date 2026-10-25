@@ -2,6 +2,10 @@ import type { Result } from "@cortex/core";
 import type { HookDef, PermissionMode, PermissionRules } from "@cortex/policy";
 import type { LLMProvider } from "@cortex/providers";
 
+/** Error codes the executor uses when a call is refused by a decision rather than failing. */
+export const REFUSAL_CODES = ["TOOL_DENIED", "TOOL_DECLINED", "TOOL_BLOCKED"] as const;
+export type RefusalCode = (typeof REFUSAL_CODES)[number];
+
 /** Runs a single tool call by name. Wraps whatever tool-running strategy the composition root wires in. */
 export interface Executor {
   execute(toolName: string, args: unknown, signal?: AbortSignal): Promise<Result<unknown>>;
@@ -10,7 +14,11 @@ export interface Executor {
 export type AgentEvent =
   | { type: "message"; content: string }
   | { type: "toolCall"; toolName: string; args: unknown }
-  | { type: "toolResult"; toolName: string; output: unknown }
+  /**
+   * `ok` is false when the call failed, and `refused` is true when the cause was a decision (the user declined, policy
+   * denied it, or a hook blocked it) rather than the tool failing. `output` is what the model is told.
+   */
+  | { type: "toolResult"; toolName: string; output: unknown; ok: boolean; refused?: true }
   /** Older history was replaced by a summary to stay inside the context budget (sizes are estimated tokens). */
   | { type: "compacted"; before: number; after: number };
 

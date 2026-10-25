@@ -665,3 +665,127 @@ describe("writeFileTool", () => {
     expect(result.ok).toBe(false);
   });
 });
+
+describe("file tool previews", () => {
+  let tempDir: string;
+  let context: ToolExecutionContext;
+  const lines = (count: number) => Array.from({ length: count }, (_, i) => `line${i + 1}`).join("\n");
+
+  beforeEach(async () => {
+    tempDir = await fs.mkdtemp(path.join(process.cwd(), "test-"));
+    context = { cwd: tempDir };
+  });
+
+  afterEach(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("only edit-style tools that change one file offer a preview", () => {
+    expect(writeFileTool.preview).toBeTypeOf("function");
+    expect(editFileTool.preview).toBeTypeOf("function");
+    expect(readFileTool.preview).toBeUndefined();
+    expect(deleteFileTool.preview).toBeUndefined();
+  });
+
+  describe("write_file", () => {
+    it("previews a new file as all added, marked new", async () => {
+      expect(await writeFileTool.preview!({ path: "a.txt", content: "hello\nworld" }, context)).toEqual({
+        kind: "diff",
+        path: "a.txt",
+        before: "",
+        after: "hello\nworld",
+        startLine: 1,
+        isNew: true,
+      });
+    });
+
+    it("previews an overwrite against the file as it is now", async () => {
+      await fs.writeFile(path.join(tempDir, "a.txt"), "old text", "utf-8");
+      expect(await writeFileTool.preview!({ path: "a.txt", content: "new text" }, context)).toEqual({
+        kind: "diff",
+        path: "a.txt",
+        before: "old text",
+        after: "new text",
+        startLine: 1,
+      });
+    });
+
+    it("returns nothing for a path outside the workspace, bad arguments or a very large file", async () => {
+      expect(await writeFileTool.preview!({ path: "../outside.txt", content: "x" }, context)).toBeUndefined();
+      expect(await writeFileTool.preview!({ path: "a.txt" } as { path: string; content: string }, context)).toBeUndefined();
+      await fs.writeFile(path.join(tempDir, "big.txt"), "x".repeat(300 * 1024), "utf-8");
+      expect(await writeFileTool.preview!({ path: "big.txt", content: "y" }, context)).toBeUndefined();
+    });
+
+    it("changes nothing on disk", async () => {
+      await fs.writeFile(path.join(tempDir, "a.txt"), "keep", "utf-8");
+      await writeFileTool.preview!({ path: "a.txt", content: "other" }, context);
+      await writeFileTool.preview!({ path: "new.txt", content: "other" }, context);
+      expect(await fs.readFile(path.join(tempDir, "a.txt"), "utf-8")).toBe("keep");
+      await expect(fs.access(path.join(tempDir, "new.txt"))).rejects.toThrow();
+    });
+  });
+
+  describe("edit_file", () => {
+    it("previews the changed line with two lines of context and the true starting line number", async () => {
+      await fs.writeFile(path.join(tempDir, "f.txt"), lines(10), "utf-8");
+      expect(await editFileTool.preview!({ path: "f.txt", oldString: "line5", newString: "LINE FIVE" }, context)).toEqual({
+        kind: "diff",
+        path: "f.txt",
+        before: "line3\nline4\nline5\nline6\nline7",
+        after: "line3\nline4\nLINE FIVE\nline6\nline7",
+        startLine: 3,
+      });
+    });
+
+    it("clamps the context at the start and the end of the file", async () => {
+      await fs.writeFile(path.join(tempDir, "f.txt"), lines(4), "utf-8");
+      expect(await editFileTool.preview!({ path: "f.txt", oldString: "line1", newString: "first" }, context)).toMatchObject({
+        before: "line1\nline2\nline3",
+        after: "first\nline2\nline3",
+        startLine: 1,
+      });
+      expect(await editFileTool.preview!({ path: "f.txt", oldString: "line4", newString: "last" }, context)).toMatchObject({
+        before: "line2\nline3\nline4",
+        after: "line2\nline3\nlast",
+        startLine: 2,
+      });
+    });
+
+    it("follows a multi-line replacement that changes the number of lines", async () => {
+      await fs.writeFile(path.join(tempDir, "f.txt"), lines(10), "utf-8");
+      expect(await editFileTool.preview!({ path: "f.txt", oldString: "line5\nline6", newString: "X" }, context)).toMatchObject({
+        before: "line3\nline4\nline5\nline6\nline7\nline8",
+        after: "line3\nline4\nX\nline7\nline8",
+        startLine: 3,
+      });
+      expect(await editFileTool.preview!({ path: "f.txt", oldString: "line5", newString: "a\nb\nc" }, context)).toMatchObject({
+        before: "line3\nline4\nline5\nline6\nline7",
+        after: "line3\nline4\na\nb\nc\nline6\nline7",
+        startLine: 3,
+      });
+    });
+
+    it("handles a replacement that starts and ends inside lines", async () => {
+      await fs.writeFile(path.join(tempDir, "f.txt"), "const a = 1;\nconst b = 2;\n", "utf-8");
+      expect(await editFileTool.preview!({ path: "f.txt", oldString: "b = 2", newString: "b = 3" }, context)).toMatchObject({
+        before: "const a = 1;\nconst b = 2;\n",
+        after: "const a = 1;\nconst b = 3;\n",
+        startLine: 1,
+      });
+    });
+
+    it("returns nothing when the text is not found, the file is missing, or the arguments are bad", async () => {
+      await fs.writeFile(path.join(tempDir, "f.txt"), "abc", "utf-8");
+      expect(await editFileTool.preview!({ path: "f.txt", oldString: "zzz", newString: "y" }, context)).toBeUndefined();
+      expect(await editFileTool.preview!({ path: "missing.txt", oldString: "a", newString: "b" }, context)).toBeUndefined();
+      expect(await editFileTool.preview!({ path: "f.txt" } as { path: string; oldString: string; newString: string }, context)).toBeUndefined();
+    });
+
+    it("changes nothing on disk", async () => {
+      await fs.writeFile(path.join(tempDir, "f.txt"), "abc", "utf-8");
+      await editFileTool.preview!({ path: "f.txt", oldString: "b", newString: "X" }, context);
+      expect(await fs.readFile(path.join(tempDir, "f.txt"), "utf-8")).toBe("abc");
+    });
+  });
+});

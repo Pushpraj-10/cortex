@@ -33,6 +33,9 @@ export const runCommandTool = defineTool<{ command: string; timeoutMs?: number }
     const command = typeof args?.command === "string" ? args.command : "?";
     return `Run ${command.length > MAX_SUMMARY_CHARS ? `${command.slice(0, MAX_SUMMARY_CHARS)}…` : command}`;
   },
+  async preview(args) {
+    return typeof args?.command === "string" ? { kind: "command", command: args.command } : undefined;
+  },
   failure: (args) => `Failed to run command ${args.command}`,
   run(args, context) {
     return new Promise((resolve) => {
