@@ -5,6 +5,7 @@
     { "path": "packages/core" },
     { "path": "packages/providers" },
     { "path": "packages/tools" },
+    { "path": "packages/policy" },
     { "path": "packages/context" },
     { "path": "packages/agent" }
   ]
