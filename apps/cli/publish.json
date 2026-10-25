@@ -1,0 +1,10 @@
+{
+  "name": "@pushpraj-10/cortex",
+  "description": "A local-first CLI coding agent: runs against Ollama, Google Gemini or Anthropic, edits your project through sandboxed tools, and asks before it does anything risky.",
+  "keywords": ["cli", "coding-agent", "ai", "llm", "ollama", "gemini", "claude", "terminal"],
+  "license": "UNLICENSED",
+  "repository": { "type": "git", "url": "git+https://github.com/Pushpraj-10/cortex.git" },
+  "homepage": "https://github.com/Pushpraj-10/cortex#readme",
+  "bugs": { "url": "https://github.com/Pushpraj-10/cortex/issues" },
+  "node": ">=22.12"
+}

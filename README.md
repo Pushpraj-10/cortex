@@ -2,16 +2,28 @@
 
 A local-first CLI coding agent. It talks to a model — Ollama on your machine, or Google Gemini / Anthropic in the cloud — reads and edits your project through sandboxed tools, and asks before it does anything risky.
 
-## Quick start
+## Install
+
+```
+npm install -g @pushpraj-10/cortex
+cd your-project
+cortex                    # full-screen terminal UI, working on the current folder
+cortex -p "explain what src/index.ts does"    # one shot: answer to stdout
+```
+
+On first run, type `/provider` to pick a provider and save its API key and model; they are kept in `~/.cortex/credentials.json` (plain text, so treat it like any other secret). For Ollama, run `ollama serve`, pull a model that supports tool calling (for example `ollama pull llama3.1`), and set `OLLAMA_MODEL`.
+
+Needs Node 22.12 or newer.
+
+## Run from source
 
 ```
 npm install
 cp .env.example .env      # set OLLAMA_MODEL (local), or a cloud key + model
 npm run dev               # full-screen terminal UI
 npm run dev -- -p "explain what src/index.ts does"    # one shot: answer to stdout
+npm run build             # bundle the installable package into apps/cli/dist
 ```
-
-Needs Node 22.12 or newer. For Ollama, run `ollama serve` and pull a model that supports tool calling (for example `ollama pull llama3.1`).
 
 ## Using it
 
@@ -100,4 +112,4 @@ npm run test:e2e         # live-model scripts in tests/ (needs Ollama running)
 
 Conventions: related small things live in one commented file per feature rather than one function per file, and each package's `test/` mirrors its `src/`. Commit messages follow [CLAUDE.md](CLAUDE.md).
 
-Known limits: no streaming yet, no built `cortex` binary (it runs through `tsx`), and `run_command` is gated only by approval, not sandboxed.
+Known limits: no streaming yet, and `run_command` is gated only by approval, not sandboxed.
