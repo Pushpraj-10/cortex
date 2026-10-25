@@ -13,6 +13,11 @@ export interface Executor {
 
 export type AgentEvent =
   | { type: "message"; content: string }
+  /**
+   * A piece of the reply the model is writing now, for showing it live. The same text then arrives whole in a `message`
+   * event, so a consumer may ignore deltas entirely.
+   */
+  | { type: "messageDelta"; delta: string }
   | { type: "toolCall"; toolName: string; args: unknown }
   /**
    * `ok` is false when the call failed, and `refused` is true when the cause was a decision (the user declined, policy

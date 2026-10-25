@@ -2,11 +2,11 @@ import React from "react";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { AgentEvent, AgentSession } from "@cortex/agent";
+import { LLM_ERROR_PREFIX, type AgentEvent, type AgentSession } from "@cortex/agent";
 import { builtinTools, registerTool } from "@cortex/tools";
 import { createPermissionBridge, type PermissionBridge } from "../../../src/runtime/permission-bridge.js";
 import { useChat, type Chat } from "../../../src/ui/hooks/useChat.js";
-import type { ToolCallEntry } from "../../../src/ui/types.js";
+import type { MessageEntry, ToolCallEntry } from "../../../src/ui/types.js";
 import { mountElement, settle } from "../support/render-frame.js";
 
 let cwd: string;
@@ -188,6 +188,139 @@ describe("useChat: interruption", () => {
     chat().reset();
     await settle();
     expect(chat().timeline).toEqual([]);
+    unmount();
+  });
+});
+
+describe("useChat: streaming text", () => {
+  const messages = (chat: Chat) => chat.timeline.filter((entry): entry is MessageEntry => entry.kind === "message");
+  const assistant = (chat: Chat) => messages(chat).filter((entry) => entry.role === "assistant");
+  const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+  it("grows one live message as text arrives, shows the first piece at once, then replaces it with the exact final text", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const { chat, unmount } = mount(async function* () {
+      yield { type: "messageDelta", delta: "a" };
+      yield { type: "messageDelta", delta: "b" };
+      yield { type: "messageDelta", delta: "c" };
+      await gate;
+      yield { type: "message", content: "abc!" };
+    });
+
+    const done = chat().submit("go");
+    await settle();
+    expect(assistant(chat())).toHaveLength(1);
+    expect(assistant(chat())[0]).toMatchObject({ content: "a", streaming: true }); // the rest is waiting for its batch
+
+    await wait(120);
+    expect(assistant(chat())[0]).toMatchObject({ content: "abc", streaming: true });
+
+    release();
+    await done;
+    await settle();
+
+    expect(assistant(chat())).toHaveLength(1);
+    expect(assistant(chat())[0]).toMatchObject({ content: "abc!", streaming: false });
+    unmount();
+  });
+
+  it("does not leave a duplicate: the finished message is the live one, not a second copy", async () => {
+    const { chat, unmount } = mount(async function* () {
+      yield { type: "messageDelta", delta: "Hello" };
+      yield { type: "message", content: "Hello" };
+    });
+    await chat().submit("hi");
+    await settle();
+    expect(messages(chat()).map((entry) => entry.role)).toEqual(["user", "assistant"]);
+    unmount();
+  });
+
+  it("keeps what the model said before a tool call as its own message, in order, then streams the next one", async () => {
+    await fs.writeFile(path.join(cwd, "f.txt"), "one\ntwo\nthree", "utf-8");
+    const { chat, unmount } = mount(async function* () {
+      yield { type: "messageDelta", delta: "Let me edit it." };
+      yield { type: "message", content: "Let me edit it." };
+      yield { type: "toolCall", toolName: "edit_file", args: editArgs };
+      yield { type: "toolResult", toolName: "edit_file", output: { success: true }, ok: true };
+      yield { type: "messageDelta", delta: "Done." };
+      yield { type: "message", content: "Done." };
+    });
+
+    await chat().submit("edit");
+    await settle();
+
+    expect(chat().timeline.map((entry) => (entry.kind === "message" ? `${entry.role}:${entry.content}` : entry.kind))).toEqual([
+      "user:edit",
+      "assistant:Let me edit it.",
+      "toolCall",
+      "assistant:Done.",
+    ]);
+    expect(assistant(chat()).every((entry) => entry.streaming === false)).toBe(true);
+    unmount();
+  });
+
+  it("keeps the text already written when the reply fails part-way, and shows the failure after it", async () => {
+    const failure = `${LLM_ERROR_PREFIX}connection reset`;
+    const { chat, unmount } = mount(async function* () {
+      yield { type: "messageDelta", delta: "partial answer" };
+      yield { type: "message", content: failure };
+    });
+
+    await chat().submit("hi");
+    await settle();
+
+    const written = assistant(chat());
+    expect(written).toHaveLength(2);
+    expect(written[0]).toMatchObject({ content: "partial answer", streaming: false });
+    expect(written[0]!.isError).toBeUndefined();
+    expect(written[1]).toMatchObject({ content: failure, isError: true });
+    unmount();
+  });
+
+  it("keeps the partial text and adds no error when the user interrupts the reply", async () => {
+    const { chat, unmount } = mount(async function* (signal) {
+      yield { type: "messageDelta", delta: "half a sent" };
+      await new Promise<void>((resolve) => signal?.addEventListener("abort", () => resolve()));
+      yield { type: "message", content: `${LLM_ERROR_PREFIX}Ollama request was cancelled` };
+    });
+
+    const done = chat().submit("hi");
+    await settle();
+    chat().cancel();
+    await done;
+    await settle();
+
+    expect(assistant(chat())).toHaveLength(1);
+    expect(assistant(chat())[0]).toMatchObject({ content: "half a sent", streaming: false });
+    expect(chat().isThinking).toBe(false);
+    unmount();
+  });
+
+  it("does not leave an empty message when only whitespace was streamed before a tool call", async () => {
+    const { chat, unmount } = mount(async function* () {
+      yield { type: "messageDelta", delta: "  " };
+      yield { type: "message", content: "  " };
+      yield { type: "toolCall", toolName: "read_file", args: { path: "f.txt" } };
+      yield { type: "toolResult", toolName: "read_file", output: {}, ok: true };
+    });
+
+    await chat().submit("x");
+    await settle();
+
+    expect(assistant(chat())).toEqual([]);
+    expect(toolCalls(chat())).toHaveLength(1);
+    unmount();
+  });
+
+  it("shows a message that was never streamed, as before", async () => {
+    const { chat, unmount } = mount(async function* () {
+      yield { type: "message", content: "all at once" };
+    });
+    await chat().submit("hi");
+    await settle();
+    expect(assistant(chat())).toMatchObject([{ content: "all at once" }]);
+    expect(assistant(chat())[0]!.streaming).toBeUndefined();
     unmount();
   });
 });

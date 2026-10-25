@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { credentialsPath, loadCredentials, saveProviderCredentials } from "@cortex/config";
+import { CortexError, err, ok } from "@cortex/core";
 import {
   anthropicProviderDescriptor,
   googleProviderDescriptor,
@@ -183,5 +184,90 @@ describe("createProviderManager", () => {
     expect((await loadCredentials(home)).activeProvider).toBeUndefined();
     expect(await manager.remove("google")).toEqual({ ok: true, value: { removed: false } });
     expect(manager.active()?.provider).toBe("google");
+  });
+});
+
+describe("createProviderManager llm.chatStream", () => {
+  let root: string;
+  let home: string;
+  const request = { messages: [{ role: "user" as const, content: "hi" }] };
+
+  beforeAll(() => {
+    registerLlmProvider(ollamaProviderDescriptor);
+    // A provider with no chatStream, to prove the manager covers for it.
+    registerLlmProvider({
+      id: "plain-test",
+      displayName: "Plain",
+      createClient: () => ({ chat: async () => ok({ role: "assistant", content: "whole reply" }) }),
+    });
+    registerLlmProvider({
+      id: "failing-test",
+      displayName: "Failing",
+      createClient: () => ({ chat: async () => err(new CortexError("down", "TEST_DOWN")) }),
+    });
+    registerLlmProvider({
+      id: "silent-test",
+      displayName: "Silent",
+      createClient: () => ({ chat: async () => ok({ role: "assistant", content: "", toolCalls: [{ toolName: "t", args: {} }] }) }),
+    });
+  });
+
+  beforeEach(async () => {
+    root = await fs.mkdtemp(path.join(process.cwd(), "test-"));
+    home = path.join(root, "home");
+    await fs.mkdir(home);
+  });
+
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
+  const events = async (stream: AsyncGenerator<unknown, void, void>) => {
+    const all: unknown[] = [];
+    for await (const event of stream) all.push(event);
+    return all;
+  };
+  const plain = (id: string) => ({ id, model: "m", config: {} }) as never;
+
+  it("says how to fix it, as an error event, when no provider is configured", async () => {
+    const manager = createProviderManager({ env: {}, home });
+    expect(await events(manager.llm.chatStream!(request))).toMatchObject([
+      { type: "error", error: { message: "No model provider is configured. Type /provider to set one up.", code: "CLI_NO_PROVIDER" } },
+    ]);
+  });
+
+  it("streams from the active provider when it can", async () => {
+    const lines = [{ message: { content: "Hel" }, done: false }, { message: { content: "lo" }, done: false }, { done: true }].map((line) => `${JSON.stringify(line)}\n`).join("");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(lines)));
+    const choice = resolveProvider("ollama", { OLLAMA_MODEL: "llama3.1", OLLAMA_BASE_URL: "http://ollama.test" });
+    if (!choice.ok) throw new Error("fixture failed");
+    const manager = createProviderManager({ env: {}, home, initial: choice.value });
+
+    expect(await events(manager.llm.chatStream!(request))).toEqual([
+      { type: "text", delta: "Hel" },
+      { type: "text", delta: "lo" },
+      { type: "done", message: { role: "assistant", content: "Hello" } },
+    ]);
+  });
+
+  it("passes a provider that cannot stream's whole reply on as one piece of text", async () => {
+    const manager = createProviderManager({ env: {}, home, initial: plain("plain-test") });
+    expect(await events(manager.llm.chatStream!(request))).toEqual([
+      { type: "text", delta: "whole reply" },
+      { type: "done", message: { role: "assistant", content: "whole reply" } },
+    ]);
+  });
+
+  it("sends no text for a reply that is only a tool call", async () => {
+    const manager = createProviderManager({ env: {}, home, initial: plain("silent-test") });
+    expect(await events(manager.llm.chatStream!(request))).toEqual([
+      { type: "done", message: { role: "assistant", content: "", toolCalls: [{ toolName: "t", args: {} }] } },
+    ]);
+  });
+
+  it("passes a failure of a provider that cannot stream on as an error event", async () => {
+    const manager = createProviderManager({ env: {}, home, initial: plain("failing-test") });
+    expect(await events(manager.llm.chatStream!(request))).toMatchObject([{ type: "error", error: { message: "down", code: "TEST_DOWN" } }]);
   });
 });

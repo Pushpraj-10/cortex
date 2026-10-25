@@ -7,14 +7,14 @@ The loop is open and model-driven: no fixed stages. What happens on a turn comes
 ```ts
 const executor = createToolsExecutor(cwd, policy);
 const session = createAgentSession({ llm, executor, workspaceRoot: cwd, policy, memory, skillIndex });
-for await (const event of session.chat("fix the parser", signal)) { /* message | toolCall | toolResult | compacted */ }
+for await (const event of session.chat("fix the parser", signal)) { /* message | messageDelta | toolCall | toolResult | compacted */ }
 ```
 
 ## A turn
 
 1. `UserPromptSubmit` hooks may block it. The system message is re-rendered (so a mode change takes effect), the user message is added, and `@cortex/context` builds a context block.
 2. The history is compacted if it has outgrown `contextBudgetTokens`: older turns are replaced by a model-written summary, keeping the system message and the recent turns (`compacted` event).
-3. The model replies. Plain text ends the turn. A tool call is run — **one per turn**, so the model sees each real result before choosing the next action.
+3. The model replies, streamed when the provider can (`messageDelta` events as text arrives; a consumer may ignore them, because the same text follows whole in a `message` event). What the model says before a tool call is also yielded as a `message`, so it is part of what the user sees. Plain text ends the turn. A tool call is run — **one per turn**, so the model sees each real result before choosing the next action.
 4. The executor runs it through the policy pipeline: `PreToolUse` hooks → permission decision (asking the user if needed) → the tool → `PostToolUse` hooks. A refusal or failure comes back as an error result whose message says what happened and what to do instead (recovery hints for missing paths, edit misses, and so on), so the model adapts instead of retrying blindly. An unknown tool is an error result listing the available tools, never a crash.
    The `toolResult` event carries `ok`, and `refused: true` when the call was stopped by a decision (the user declined, policy denied it, a hook blocked it) rather than failing, so a UI can tell "no" from "broke" without reading the message.
 5. The result goes back into the history (oversized results are truncated) and the loop repeats, up to `maxIterations` (default 16). `Stop` hooks run at the end.

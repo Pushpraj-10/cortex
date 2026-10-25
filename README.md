@@ -113,7 +113,7 @@ npm run test:e2e         # live-model scripts in tests/ (needs Ollama running)
 
 Conventions: related small things live in one commented file per feature rather than one function per file, and each package's `test/` mirrors its `src/`. Commit messages follow [CLAUDE.md](CLAUDE.md).
 
-Known limits: no streaming yet, and `run_command` is gated only by approval, not sandboxed.
+Replies stream in as the model writes them (Ollama, Google and Anthropic); `-p` runs print only the final answer. Known limit: `run_command` is gated only by approval, not sandboxed.
 
 ## Acknowledgements
 

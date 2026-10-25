@@ -76,10 +76,37 @@ export function createProviderManager(options: ProviderManagerOptions): Provider
   let current: LLMProvider | null = options.initial ? createClient(options.initial) : null;
   let active: ActiveProvider | null = options.initial ? { provider: options.initial.id, model: options.initial.model } : null;
 
+  const noProvider = () => failure("No model provider is configured. Type /provider to set one up.", "CLI_NO_PROVIDER");
+
   const llm: LLMProvider = {
     async chat(request) {
-      if (!current) return failure("No model provider is configured. Type /provider to set one up.", "CLI_NO_PROVIDER");
+      if (!current) return noProvider();
       return current.chat(request);
+    },
+
+    /**
+     * Streams from whichever provider is active when the request starts (a switch mid-reply does not move it). A provider that
+     * cannot stream gets its whole reply passed on as one piece of text, so callers can treat every provider the same way.
+     */
+    async *chatStream(request) {
+      const provider = current;
+      if (!provider) {
+        const missing = noProvider();
+        yield { type: "error", error: missing.ok ? new CortexError("No model provider is configured.", "CLI_NO_PROVIDER") : missing.error };
+        return;
+      }
+      if (provider.chatStream) {
+        yield* provider.chatStream(request);
+        return;
+      }
+
+      const reply = await provider.chat(request);
+      if (!reply.ok) {
+        yield { type: "error", error: reply.error };
+        return;
+      }
+      if (reply.value.content !== "") yield { type: "text", delta: reply.value.content };
+      yield { type: "done", message: reply.value };
     },
   };
 

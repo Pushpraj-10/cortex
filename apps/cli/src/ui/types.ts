@@ -10,6 +10,8 @@ export interface MessageEntry {
   content: string;
   /** True for the "LLM request failed" message an unreachable/erroring model produces. */
   isError?: boolean;
+  /** True while the model is still writing this message and `content` is growing. */
+  streaming?: boolean;
 }
 
 export interface ToolCallEntry {

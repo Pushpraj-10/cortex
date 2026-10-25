@@ -14,6 +14,9 @@ import {
 import type { PermissionBridge, PermissionRequest } from "../../runtime/permission-bridge.js";
 import type { TimelineEntry, ToolCallEntry } from "../types.js";
 
+/** How often text that has streamed in is added to the screen. The first piece shows at once; the rest are batched so a fast model cannot flood the renderer. */
+const STREAM_FLUSH_MS = 50;
+
 function nextId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -58,6 +61,38 @@ export function useChat(session: AgentSession, permissions: PermissionBridge, cw
   const pendingPermissionRef = useRef<PermissionRequest | null>(null);
   /** The call the agent is running now. The loop does one at a time, so a result or an approval belongs to this one. */
   const currentToolIdRef = useRef<string | null>(null);
+  /** The assistant message being written right now, while text streams in, and the text waiting for the next batch. */
+  const streamingIdRef = useRef<string | null>(null);
+  const pendingDeltaRef = useRef("");
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Adds the batched text to the live message. */
+  function flushDelta() {
+    if (flushTimerRef.current) {
+      clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+    const id = streamingIdRef.current;
+    const text = pendingDeltaRef.current;
+    pendingDeltaRef.current = "";
+    if (!id || text === "") return;
+    setTimeline((previous) => previous.map((entry) => (entry.kind === "message" && entry.id === id ? { ...entry, content: entry.content + text } : entry)));
+  }
+
+  /** Closes the live message. With `final`, its text becomes exactly that; a message left empty is removed. */
+  function endStreaming(final?: string) {
+    flushDelta();
+    const id = streamingIdRef.current;
+    streamingIdRef.current = null;
+    if (!id) return;
+    setTimeline((previous) =>
+      previous.flatMap((entry) => {
+        if (entry.kind !== "message" || entry.id !== id) return [entry];
+        const content = final ?? entry.content;
+        return content.trim() === "" ? [] : [{ ...entry, content, streaming: false }];
+      }),
+    );
+  }
 
   function updateToolCall(id: string | null, patch: Partial<ToolCallEntry>) {
     if (!id) return;
@@ -78,6 +113,7 @@ export function useChat(session: AgentSession, permissions: PermissionBridge, cw
     () => () => {
       abortControllerRef.current?.abort();
       pendingPermissionRef.current?.resolve(false);
+      if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
     },
     [],
   );
@@ -109,7 +145,18 @@ export function useChat(session: AgentSession, permissions: PermissionBridge, cw
 
     try {
       for await (const event of sessionRef.current.chat(text, controller.signal)) {
-        if (event.type === "toolCall") {
+        if (event.type === "messageDelta") {
+          if (userCancelledRef.current) continue;
+          if (!streamingIdRef.current) {
+            const id = nextId("assistant");
+            streamingIdRef.current = id;
+            append({ kind: "message", id, role: "assistant", content: event.delta, streaming: true });
+          } else {
+            pendingDeltaRef.current += event.delta;
+            if (!flushTimerRef.current) flushTimerRef.current = setTimeout(flushDelta, STREAM_FLUSH_MS);
+          }
+        } else if (event.type === "toolCall") {
+          endStreaming(); // the model's text always ends before a tool call; this only guards against a message event that never came
           // The loop waits at this event until the next one is asked for, so the file is still as it was when the preview is taken.
           const preview = await previewToolCall(event.toolName, event.args, cwd);
           const id = nextId("tool");
@@ -143,17 +190,21 @@ export function useChat(session: AgentSession, permissions: PermissionBridge, cw
           );
         } else if (event.type === "compacted") {
           append({ kind: "notice", id: nextId("notice"), text: `Context compacted (~${event.before} → ~${event.after} tokens)` });
-        } else if (!userCancelledRef.current) {
-          append({
-            kind: "message",
-            id: nextId("assistant"),
-            role: "assistant",
-            content: event.content,
-            isError: isLlmFailureMessage(event.content),
-          });
+        } else {
+          // A finished message. If its text has been streaming in, it replaces that text with the exact complete version; a
+          // failure keeps whatever was written before it and goes in a message of its own.
+          const failed = isLlmFailureMessage(event.content);
+          const wasStreaming = streamingIdRef.current !== null;
+          if (wasStreaming) endStreaming(failed || userCancelledRef.current ? undefined : event.content);
+          // A streamed message that completed is already on screen (its text was replaced just above); anything else is new.
+          const alreadyOnScreen = wasStreaming && !failed;
+          if (!userCancelledRef.current && !alreadyOnScreen) {
+            append({ kind: "message", id: nextId("assistant"), role: "assistant", content: event.content, isError: failed });
+          }
         }
       }
     } finally {
+      endStreaming();
       setIsThinking(false);
       abortControllerRef.current = null;
       currentToolIdRef.current = null;
@@ -192,6 +243,10 @@ export function useChat(session: AgentSession, permissions: PermissionBridge, cw
     answerPermission,
     notify: (text) => append({ kind: "notice", id: nextId("notice"), text }),
     reset: () => {
+      if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+      streamingIdRef.current = null;
+      pendingDeltaRef.current = "";
       setTimeline([]);
       setExpandedToolCallIds(new Set());
     },

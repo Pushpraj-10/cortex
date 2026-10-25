@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ok, err, CortexError, type Result } from "@cortex/core";
-import type { ChatMessage, LLMProvider } from "@cortex/providers";
+import type { ChatMessage, LLMProvider, StreamEvent } from "@cortex/providers";
 import { LLM_ERROR_PREFIX, runToolLoop } from "../src/loop.js";
 import type { Executor } from "../src/types.js";
 
@@ -260,5 +260,117 @@ describe("LLM_ERROR_PREFIX", () => {
 
     expect(events[0]).toEqual({ type: "message", content: `${LLM_ERROR_PREFIX}network down` });
     expect(LLM_ERROR_PREFIX).toBe("LLM request failed: ");
+  });
+});
+
+/** A provider that streams: each call to chatStream plays the next turn's events. `chat` must not be used. */
+function streamingLlm(...turns: StreamEvent[][]): LLMProvider & { chatStream: NonNullable<LLMProvider["chatStream"]> } {
+  let next = 0;
+  return {
+    chat: vi.fn().mockRejectedValue(new Error("chat() should not be used when the provider streams")),
+    async *chatStream() {
+      for (const event of turns[next++] ?? []) yield event;
+    },
+  };
+}
+
+const text = (delta: string): StreamEvent => ({ type: "text", delta });
+const done = (message: Omit<ChatMessage, "role">): StreamEvent => ({ type: "done", message: { role: "assistant", ...message } });
+
+describe("runToolLoop with a streaming provider", () => {
+  it("passes text on as deltas, then gives the whole reply as a message", async () => {
+    const llm = streamingLlm([text("Hel"), text("lo"), done({ content: "Hello" })]);
+    const history: ChatMessage[] = [{ role: "user", content: "hi" }];
+
+    const events = await collect(runToolLoop(history, { llm, executor: { execute: vi.fn() }, tools: [] }));
+
+    expect(events).toEqual([
+      { type: "messageDelta", delta: "Hel" },
+      { type: "messageDelta", delta: "lo" },
+      { type: "message", content: "Hello" },
+    ]);
+    expect(history).toContainEqual({ role: "assistant", content: "Hello" });
+    expect(llm.chat).not.toHaveBeenCalled();
+  });
+
+  it("shows what the model said before a tool call, whole, before the call itself", async () => {
+    const call = { toolName: "read_file", args: { path: "a.ts" } };
+    const llm = streamingLlm([text("Let me "), text("look."), done({ content: "Let me look.", toolCalls: [call] })], [text("Done."), done({ content: "Done." })]);
+    const executor: Executor = { execute: vi.fn().mockResolvedValue(ok("file text")) };
+
+    const events = await collect(runToolLoop([{ role: "user", content: "x" }], { llm, executor, tools: [] }));
+
+    expect(events.map((event) => event.type)).toEqual(["messageDelta", "messageDelta", "message", "toolCall", "toolResult", "messageDelta", "message"]);
+    expect(events[2]).toEqual({ type: "message", content: "Let me look." });
+    expect(events[3]).toEqual({ type: "toolCall", toolName: "read_file", args: { path: "a.ts" } });
+  });
+
+  it("emits nothing before a tool call when the model wrote nothing", async () => {
+    const llm = streamingLlm([done({ content: "", toolCalls: [{ toolName: "t", args: {} }] })], [done({ content: "ok" })]);
+    const executor: Executor = { execute: vi.fn().mockResolvedValue(ok(1)) };
+
+    const events = await collect(runToolLoop([{ role: "user", content: "x" }], { llm, executor, tools: [] }));
+
+    expect(events.map((event) => event.type)).toEqual(["toolCall", "toolResult", "message"]);
+  });
+
+  it("keeps the complete message, tool call included, in the history", async () => {
+    const call = { toolName: "t", args: { a: 1 } };
+    const llm = streamingLlm([text("x"), done({ content: "x", toolCalls: [call] })], [done({ content: "end" })]);
+    const history: ChatMessage[] = [{ role: "user", content: "go" }];
+
+    await collect(runToolLoop(history, { llm, executor: { execute: vi.fn().mockResolvedValue(ok(1)) }, tools: [] }));
+
+    expect(history[1]).toEqual({ role: "assistant", content: "x", toolCalls: [call] });
+  });
+
+  it("turns a failed stream into the usual model-failure message and records nothing in the history", async () => {
+    const llm = streamingLlm([{ type: "error", error: new CortexError("Ollama stream was interrupted: reset", "LLM_OLLAMA_REQUEST_FAILED") }]);
+    const history: ChatMessage[] = [{ role: "user", content: "hi" }];
+
+    const events = await collect(runToolLoop(history, { llm, executor: { execute: vi.fn() }, tools: [] }));
+
+    expect(events).toEqual([{ type: "message", content: `${LLM_ERROR_PREFIX}Ollama stream was interrupted: reset` }]);
+    expect(history).toHaveLength(1);
+  });
+
+  it("shows the text already streamed and then the failure, when a stream breaks part-way", async () => {
+    const llm = streamingLlm([text("partial"), { type: "error", error: new Error("connection reset") }]);
+
+    const events = await collect(runToolLoop([{ role: "user", content: "hi" }], { llm, executor: { execute: vi.fn() }, tools: [] }));
+
+    expect(events).toEqual([
+      { type: "messageDelta", delta: "partial" },
+      { type: "message", content: `${LLM_ERROR_PREFIX}connection reset` },
+    ]);
+  });
+
+  it("reports a stream that ends without finishing", async () => {
+    const llm = streamingLlm([text("so")]);
+
+    const events = await collect(runToolLoop([{ role: "user", content: "hi" }], { llm, executor: { execute: vi.fn() }, tools: [] }));
+
+    expect(events[events.length - 1]).toEqual({ type: "message", content: `${LLM_ERROR_PREFIX}The model's reply ended without finishing` });
+  });
+});
+
+describe("runToolLoop with a provider that does not stream", () => {
+  it("now shows what the model said before a tool call, once, whole", async () => {
+    const llm = llmReturning(
+      ok({ role: "assistant", content: "Checking.", toolCalls: [{ toolName: "t", args: {} }] }),
+      ok({ role: "assistant", content: "Done" }),
+    );
+    const executor: Executor = { execute: vi.fn().mockResolvedValue(ok(1)) };
+
+    const events = await collect(runToolLoop([{ role: "user", content: "x" }], { llm, executor, tools: [] }));
+
+    expect(events.map((event) => event.type)).toEqual(["message", "toolCall", "toolResult", "message"]);
+    expect(events[0]).toEqual({ type: "message", content: "Checking." });
+  });
+
+  it("still emits nothing before a tool call that came with no text", async () => {
+    const llm = llmReturning(ok({ role: "assistant", content: "  ", toolCalls: [{ toolName: "t", args: {} }] }), ok({ role: "assistant", content: "Done" }));
+    const events = await collect(runToolLoop([{ role: "user", content: "x" }], { llm, executor: { execute: vi.fn().mockResolvedValue(ok(1)) }, tools: [] }));
+    expect(events[0]).toMatchObject({ type: "toolCall" });
   });
 });

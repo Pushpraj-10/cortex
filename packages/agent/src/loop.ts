@@ -1,4 +1,5 @@
-import type { ChatMessage, LLMProvider, ToolSpec } from "@cortex/providers";
+import { CortexError, err, ok, type Result } from "@cortex/core";
+import type { ChatMessage, ChatRequest, LLMProvider, ToolSpec } from "@cortex/providers";
 import { compactHistory } from "./compaction.js";
 import { REFUSAL_CODES, type AgentEvent, type Executor } from "./types.js";
 
@@ -29,6 +30,28 @@ export interface ToolLoopDeps {
    * where a small model actually attends.
    */
   contextBlock?: string;
+}
+
+/**
+ * One request to the model. A provider that can stream has its text passed on as `messageDelta` events as it is
+ * written; either way the outcome is the complete message (or an error), exactly as `chat` would give it.
+ */
+async function* ask(llm: LLMProvider, request: ChatRequest): AsyncGenerator<AgentEvent, { result: Result<ChatMessage>; streamed: boolean }, void> {
+  if (!llm.chatStream) return { result: await llm.chat(request), streamed: false };
+
+  let streamed = false;
+  for await (const event of llm.chatStream(request)) {
+    if (event.type === "text") {
+      streamed = true;
+      yield { type: "messageDelta", delta: event.delta };
+    } else if (event.type === "error") {
+      const error = event.error instanceof CortexError ? event.error : new CortexError(event.error.message, "LLM_STREAM_FAILED", event.error);
+      return { result: err(error), streamed };
+    } else {
+      return { result: ok(event.message), streamed };
+    }
+  }
+  return { result: err(new CortexError("The model's reply ended without finishing", "LLM_STREAM_ENDED")), streamed };
 }
 
 function truncate(text: string): string {
@@ -64,7 +87,7 @@ export async function* runToolLoop(
     const requestMessages = deps.contextBlock
       ? [...history, { role: "user" as const, content: deps.contextBlock }]
       : history;
-    const result = await deps.llm.chat({ messages: requestMessages, tools: deps.tools, signal });
+    const { result, streamed } = yield* ask(deps.llm, { messages: requestMessages, tools: deps.tools, signal });
 
     if (!result.ok) {
       yield { type: "message", content: `${LLM_ERROR_PREFIX}${result.error.message}` };
@@ -80,6 +103,10 @@ export async function* runToolLoop(
       yield { type: "message", content: result.value.content };
       return;
     }
+
+    // What the model said before calling the tool ("Let me look at that file.") is part of the conversation. It is shown
+    // whole here, which also closes the live text a streaming UI has been drawing.
+    if (streamed || result.value.content.trim() !== "") yield { type: "message", content: result.value.content };
 
     // Only the first call is run, even if the model asked for several at once — one
     // action per turn, so the model sees its real result before deciding the next one.

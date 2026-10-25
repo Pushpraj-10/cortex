@@ -11,7 +11,7 @@ const reply = await provider.chat({ messages, tools, signal });   // Result<Chat
 
 - `ChatMessage` — `role`, `content`, optional `name` (tool results) and `toolCalls` (assistant requests)
 - `ToolSpec` — a tool offered to the model: `name`, `description`, JSON-schema `parametersSchema`
-- `LLMProvider` — `chat(request): Promise<Result<ChatMessage>>`; non-streaming; never throws for an expected failure
+- `LLMProvider` — `chat(request): Promise<Result<ChatMessage>>` waits for the whole reply and never throws for an expected failure. An optional `chatStream(request)` answers the same request as a stream of `StreamEvent`s: any number of `{ type: "text", delta }` pieces as the model writes, then exactly one `{ type: "done", message }` (the same message `chat` would return, tool calls included) or one `{ type: "error", error }`. A stream that ends before its finish marker, or breaks part-way, is an error event, never a truncated answer. Ollama (newline-delimited JSON), Google (`streamGenerateContent?alt=sse`) and Anthropic (server-sent events) all implement it, on shared readers in `wire.ts` (`readLines`, `readSseData`) that cope with chunks split anywhere, even inside a multi-byte character. Cancelling through `request.signal` ends the stream with an error event.
 - `LLMProviderDescriptor<TConfig>` — `id`, `displayName`, `createClient(config)`
 
 `registerLlmProvider(descriptor)` and `getLlmProvider(id)` (`src/registry.ts`) are filled once by the composition root. Providers do not register themselves.
