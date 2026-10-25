@@ -1,25 +1,21 @@
 /**
- * @cortex/providers — provider-agnostic LLM access via a self-registering descriptor
- * registry. Providers (Ollama, Claude, OpenAI, etc.) never appear as hardcoded
- * branches; each self-registers and the composition root controls what's active.
+ * @cortex/providers — provider-agnostic LLM access via a descriptor registry. Providers
+ * (Ollama, Groq, Anthropic) never appear as hardcoded branches in consumers; the
+ * composition root registers the ones it wants and looks them up by id.
  */
 
-// Shared types
-export type { ChatRole, ChatMessage, ToolSpec, ToolCall, ChatRequest } from "./types.js";
+export type {
+  ChatMessage,
+  ChatRequest,
+  ChatRole,
+  LLMProvider,
+  LLMProviderDescriptor,
+  ToolCall,
+  ToolSpec,
+} from "./types.js";
+export { UnknownProviderError, getLlmProvider, registerLlmProvider } from "./registry.js";
+export { ProviderRequestError } from "./wire.js";
 
-// Core provider contract & registry
-export type { LLMProvider } from "./core/llm-provider.js";
-export type { LLMProviderDescriptor } from "./core/llm-provider-descriptor.js";
-export { registerProvider, getProvider, listProviders, UnknownProviderError } from "./core/provider-registry.js";
-
-// Ollama provider
-export { createOllamaClient } from "./ollama/client.js";
-export { ollamaProviderDescriptor } from "./ollama/descriptor.js";
-export { OllamaRequestError } from "./ollama/errors.js";
-export type { OllamaConfig } from "./ollama/config.js";
-
-// Groq provider
-export { createGroqClient } from "./groq/client.js";
-export { groqProviderDescriptor } from "./groq/descriptor.js";
-export { GroqRequestError } from "./groq/errors.js";
-export type { GroqConfig } from "./groq/config.js";
+export { anthropicProviderDescriptor, createAnthropicClient, type AnthropicConfig } from "./anthropic.js";
+export { createGroqClient, groqProviderDescriptor, type GroqConfig } from "./groq.js";
+export { createOllamaClient, ollamaProviderDescriptor, type OllamaConfig } from "./ollama.js";

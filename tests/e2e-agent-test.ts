@@ -15,7 +15,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-import { createOllamaClient } from "../packages/providers/src/ollama/client.js";
+import { createOllamaClient } from "../packages/providers/src/ollama.js";
 import {
   registerTool,
   readFileTool,

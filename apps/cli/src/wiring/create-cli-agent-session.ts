@@ -1,5 +1,5 @@
 import { ok, type Result } from "@cortex/core";
-import { getProvider } from "@cortex/providers";
+import { getLlmProvider } from "@cortex/providers";
 import { createAgentSession, createToolsExecutor, type AgentSession } from "@cortex/agent";
 import { resolveOllamaConfig } from "./resolve-ollama-config.js";
 import { resolveGroqConfig } from "./resolve-groq-config.js";
@@ -26,7 +26,7 @@ export function createCliAgentSession(cwd: string): Result<CliAgentSession> {
     const configResult = resolveGroqConfig();
     if (!configResult.ok) return configResult;
 
-    const llm = getProvider("groq").createClient(configResult.value);
+    const llm = getLlmProvider("groq").createClient(configResult.value);
     const executor = createToolsExecutor(cwd);
     const session = createAgentSession({ llm, executor, workspaceRoot: cwd });
 
@@ -36,7 +36,7 @@ export function createCliAgentSession(cwd: string): Result<CliAgentSession> {
   const configResult = resolveOllamaConfig();
   if (!configResult.ok) return configResult;
 
-  const llm = getProvider("ollama").createClient(configResult.value);
+  const llm = getLlmProvider("ollama").createClient(configResult.value);
   const executor = createToolsExecutor(cwd);
   const session = createAgentSession({ llm, executor, workspaceRoot: cwd });
 
