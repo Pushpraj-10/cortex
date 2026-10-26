@@ -29,8 +29,9 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
   const sections = [
     [
       `You are Cortex, a coding agent working in the repository rooted at ${options.workspaceRoot}.`,
-      "Understand the task, inspect the repository as needed, and make the minimum change",
-      "that accomplishes it. Prefer edit_file for a targeted change to an existing file over",
+      "Understand the task, inspect the repository only if the task needs it, and make the",
+      "minimum change that accomplishes it. A greeting, a general question, or anything you can",
+      "answer without the code needs no tools — just reply. Prefer edit_file for a targeted change to an existing file over",
       "rewriting it with write_file. Use write_file only to create a new file or when the",
       "whole file's contents need to change.",
       "",
