@@ -5,5 +5,5 @@
 
 export { PERMISSION_MODES } from "./types.js";
 export type { Decision, HookDef, HookEvent, HookOutcome, PermissionMode, PermissionRules } from "./types.js";
-export { decidePermission, isPermissionMode, matchRule } from "./permissions.js";
+export { decidePermission, isPermissionMode, matchRule, primaryArgument } from "./permissions.js";
 export { runHooks } from "./hooks.js";

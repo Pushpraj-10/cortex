@@ -30,7 +30,7 @@ Shell commands registered per event: `PreToolUse`, `PostToolUse`, `UserPromptSub
 
 ## API
 
-`decidePermission(tool, input, mode, rules)`, `matchRule`, `isPermissionMode`, `PERMISSION_MODES`, `runHooks(hooks, event, payload, cwd)`, and the types `PermissionMode`, `PermissionRules`, `Decision`, `HookDef`, `HookEvent`, `HookOutcome`.
+`decidePermission(tool, input, mode, rules)`, `matchRule`, `primaryArgument` (the argument a rule's pattern is matched against), `isPermissionMode`, `PERMISSION_MODES`, `runHooks(hooks, event, payload, cwd)`, and the types `PermissionMode`, `PermissionRules`, `Decision`, `HookDef`, `HookEvent`, `HookOutcome`.
 
 ## Files
 
