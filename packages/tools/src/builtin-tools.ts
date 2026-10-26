@@ -11,6 +11,7 @@ import {
   writeFileTool,
 } from "./filesystem.js";
 import { findFilesTool, searchFilesTool } from "./search.js";
+import { saveSecurityReportTool } from "./security.js";
 import { runCommandTool } from "./shell.js";
 import type { ToolDefinition } from "./types.js";
 
@@ -29,4 +30,5 @@ export const builtinTools: ToolDefinition[] = [
   moveFileTool,
   deleteFileTool,
   runCommandTool,
+  saveSecurityReportTool,
 ] as ToolDefinition[];

@@ -23,3 +23,11 @@ export {
 } from "./filesystem.js";
 export { findFilesTool, searchFilesTool } from "./search.js";
 export { runCommandTool, type RunCommandResult } from "./shell.js";
+export {
+  SECURITY_REPORT_DIR,
+  SECURITY_REPORT_STAGES,
+  isSecurityReportStage,
+  saveSecurityReportTool,
+  securityReportPath,
+  type SecurityReportStage,
+} from "./security.js";
