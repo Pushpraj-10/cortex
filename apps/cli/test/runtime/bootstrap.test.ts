@@ -49,6 +49,14 @@ describe("bootstrap", () => {
     expect(fromFlag.ok && fromFlag.value.policy.mode).toBe("acceptEdits");
   });
 
+  it("starts as the general agent, or as the agent named by --agent", async () => {
+    const plain = await bootstrap({ cwd, interactive: true, env, home });
+    expect(plain.ok && plain.value.policy.agent).toBeUndefined();
+
+    const scan = await bootstrap({ cwd, interactive: true, env, home, agent: "scan" });
+    expect(scan.ok && scan.value.policy.agent).toBe("scan");
+  });
+
   it("carries permission rules and hooks from settings into the policy", async () => {
     await fs.mkdir(path.join(cwd, ".cortex"));
     await fs.writeFile(

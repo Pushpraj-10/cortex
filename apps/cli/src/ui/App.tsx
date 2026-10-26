@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { homedir } from "node:os";
 import { Box, useApp, useInput, useStdin } from "ink";
-import type { AgentPolicy, AgentSession } from "@cortex/agent";
+import type { AgentModeId, AgentPolicy, AgentSession } from "@cortex/agent";
 import { PERMISSION_MODES, type PermissionMode } from "@cortex/policy";
 
 import { HELP_TEXT, runSlashCommand, slashCommands, type CommandHost } from "./commands.js";
@@ -94,6 +94,7 @@ export function App({
   const shownCwd = useMemo(() => tildify(cwd, homedir()), [cwd]);
   const input = useTextInput();
   const [mode, setModeState] = useState<PermissionMode>(policy.mode);
+  const [agent, setAgentState] = useState<AgentModeId | undefined>(policy.agent);
   const [submitted, setSubmitted] = useState<string[]>(initialHistory ?? []);
   const history = useInputHistory(submitted);
   const [slashIndex, setSlashIndex] = useState(0);
@@ -160,6 +161,11 @@ export function App({
     setModeState(next);
   }
 
+  function setAgent(next: AgentModeId | undefined) {
+    policy.agent = next;
+    setAgentState(next);
+  }
+
   function cycleMode() {
     setMode(PERMISSION_MODES[(PERMISSION_MODES.indexOf(mode) + 1) % PERMISSION_MODES.length]!);
   }
@@ -170,6 +176,8 @@ export function App({
     provider: active?.provider ?? "not configured — type /provider",
     theme: themeName,
     setMode,
+    agent,
+    setAgent,
     setTheme: (next) => {
       setThemeName(next);
       onThemeChange?.(next);
@@ -422,7 +430,7 @@ export function App({
             />
           )}
           <InputBox value={shownValue} cursorOffset={shownCursor} mask={setup.prompt?.secret === true} placeholder={placeholder} />
-          <StatusLine model={active ? `${active.model} (${active.provider})` : "no provider"} mode={mode} cwd={shownCwd} branch={branch} context={chat.context} />
+          <StatusLine model={active ? `${active.model} (${active.provider})` : "no provider"} mode={mode} agent={agent} cwd={shownCwd} branch={branch} context={chat.context} />
         </Box>
       </TerminalSizeContext.Provider>
     </ThemeContext.Provider>

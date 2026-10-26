@@ -59,6 +59,7 @@ cortex -p "explain what src/index.ts does"     # the answer goes to stdout
 | `/help` | commands and keyboard shortcuts |
 | `/clear` | start a new conversation |
 | `/mode [name]` | show or set the permission mode |
+| `/agent [name]` | show or switch the agent: `scan`, `suggest`, `fix` (see [Security agents](#security-agents)), or `off` for the general agent |
 | `/provider [name]` | set up a provider's API key and model, and switch to it (`/provider remove <name>` forgets it) |
 | `/model` | show the active model and provider |
 | `/theme [name]` | show or switch the color theme (`dark`, `light`, `mono`); remembered in `~/.cortex/preferences.json`, and `NO_COLOR` always forces `mono` |
@@ -90,8 +91,21 @@ Messages are remembered between sessions, per project, in `~/.cortex/history/` (
 | Flag | Meaning |
 | --- | --- |
 | `--mode <mode>` | set the permission mode |
+| `--agent <name>` | start as an agent: `scan`, `suggest` or `fix` |
 | `-p <prompt>` | run one prompt without the UI: tool calls go to stderr, the answer to stdout, and anything needing approval is refused unless the mode or a rule allows it |
 | `-h`, `--help` | show usage |
+
+### Security agents
+
+`/agent` gives Cortex a role with its own instructions and a limit on its tools that is enforced, not just prompted. Run them in order; each saves a report in `.cortex/security/` that the next one reads, so you can review in between.
+
+| Agent | Does | Can use | Saves |
+| --- | --- | --- | --- |
+| `scan` | finds security vulnerabilities (injection, auth, secrets, path traversal, SSRF, weak crypto, vulnerable dependencies, ...) | read tools only | `scan.md` |
+| `suggest` | proposes a fix for each finding, with trade-offs and a priority order | read tools only | `suggestions.md` |
+| `fix` | applies the fixes, then runs the project's tests | read, edit and run tools | `fixes.md` |
+
+The agent is separate from the permission mode, which still applies: `fix` in `plan` mode cannot edit, and `fix` asks before each edit unless the mode allows it. Saving a report is an edit, so `scan` and `suggest` ask once to save theirs (or use `acceptEdits`, which is safe for them because they can edit nothing else). In a one-shot run, use `cortex --agent scan --mode acceptEdits -p "audit src/"`.
 
 ### Permission modes
 

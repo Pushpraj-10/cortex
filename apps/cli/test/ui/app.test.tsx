@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import type { AgentSession } from "@cortex/agent";
+import type { AgentModeId, AgentPolicy, AgentSession } from "@cortex/agent";
 import { KEY, driveApp, type DrivenApp } from "./support/drive-app.js";
 import { settle } from "./support/render-frame.js";
 
@@ -37,6 +37,50 @@ describe("App: typing and sending", () => {
     }
     expect(a.sent).toEqual(["same", "same", "other", "same"]);
     expect(a.remembered).toEqual(["same", "other", "same"]);
+  });
+});
+
+describe("App: /agent", () => {
+  const policyWith = (agent?: AgentModeId): AgentPolicy => ({
+    mode: "default",
+    agent,
+    rules: { allow: [], deny: [] },
+    hooks: [],
+    askPermission: async () => false,
+  });
+
+  it("switches the shared policy's agent, shows it in the status line, and does not send the command to the model", async () => {
+    const policy = policyWith();
+    const a = await start({ policy });
+
+    await a.type("/agent scan");
+    await a.press(KEY.enter);
+
+    expect(policy.agent).toBe("scan");
+    expect(a.screen()).toContain("scan agent");
+    expect(a.screen()).toContain("Agent: scan");
+    expect(a.sent).toEqual([]);
+  });
+
+  it("returns to the general agent with /agent off", async () => {
+    const policy = policyWith("fix");
+    const a = await start({ policy });
+    expect(a.screen()).toContain("fix agent");
+
+    await a.type("/agent off");
+    await a.press(KEY.enter);
+
+    expect(policy.agent).toBeUndefined();
+    expect(a.screen()).not.toContain("fix agent");
+  });
+
+  it("keeps the agent through /clear", async () => {
+    const policy = policyWith("suggest");
+    const a = await start({ policy });
+    await a.type("/clear");
+    await a.press(KEY.enter);
+    expect(policy.agent).toBe("suggest");
+    expect(a.screen()).toContain("suggest agent");
   });
 });
 

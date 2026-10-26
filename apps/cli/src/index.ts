@@ -26,7 +26,7 @@ if (args.value.help) {
 loadDotEnv();
 
 const cwd = process.cwd();
-const boot = await bootstrap({ cwd, mode: args.value.mode, interactive: args.value.prompt === undefined });
+const boot = await bootstrap({ cwd, mode: args.value.mode, agent: args.value.agent, interactive: args.value.prompt === undefined });
 if (!boot.ok) {
   console.error(`Cortex failed to start: ${boot.error.message}`);
   process.exit(1);

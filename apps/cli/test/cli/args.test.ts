@@ -13,6 +13,19 @@ describe("parseArgs", () => {
     });
   });
 
+  it("reads --agent alongside the other options", () => {
+    expect(parseArgs(["--agent", "scan", "--mode", "acceptEdits", "-p", "audit src/"])).toEqual({
+      ok: true,
+      value: { help: false, agent: "scan", mode: "acceptEdits", prompt: "audit src/" },
+    });
+  });
+
+  it("rejects an unknown agent, naming the valid ones", () => {
+    const result = parseArgs(["--agent", "hack"]);
+    expect(!result.ok && result.error).toBeInstanceOf(UsageError);
+    expect(!result.ok && result.error.message).toBe('Unknown --agent "hack". Use one of: scan, suggest, fix');
+  });
+
   it("recognises -h and --help", () => {
     expect(parseArgs(["-h"])).toEqual({ ok: true, value: { help: true } });
     expect(parseArgs(["--help"])).toEqual({ ok: true, value: { help: true } });
@@ -27,6 +40,7 @@ describe("parseArgs", () => {
   it("rejects a flag with no value", () => {
     expect(parseArgs(["-p"]).ok).toBe(false);
     expect(parseArgs(["--mode"]).ok).toBe(false);
+    expect(parseArgs(["--agent"]).ok).toBe(false);
   });
 
   it("rejects an unknown option", () => {

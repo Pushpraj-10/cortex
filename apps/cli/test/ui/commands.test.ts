@@ -8,6 +8,8 @@ function host(overrides: Partial<CommandHost> = {}): CommandHost {
     provider: "ollama",
     theme: "dark",
     setMode: vi.fn(),
+    agent: undefined,
+    setAgent: vi.fn(),
     setTheme: vi.fn(),
     openProviderSetup: vi.fn(),
     removeProvider: vi.fn(),
@@ -67,6 +69,55 @@ describe("runSlashCommand", () => {
     runSlashCommand("/mode yolo", h);
     expect(h.setMode).not.toHaveBeenCalled();
     expect(vi.mocked(h.notify).mock.calls[0]![0]).toContain('Unknown mode "yolo"');
+  });
+
+  it("/agent with no argument shows the current agent and what each one does", () => {
+    const h = host({ agent: "suggest" });
+    runSlashCommand("/agent", h);
+    expect(h.setAgent).not.toHaveBeenCalled();
+    const shown = vi.mocked(h.notify).mock.calls[0]![0];
+    expect(shown).toContain("Agent: suggest");
+    for (const id of ["scan", "suggest", "fix"]) expect(shown).toContain(id);
+    expect(shown).toContain("off");
+  });
+
+  it("/agent with no argument says the general agent is active when none is set", () => {
+    const h = host();
+    runSlashCommand("/agent", h);
+    expect(vi.mocked(h.notify).mock.calls[0]![0]).toContain("Agent: none (general agent)");
+  });
+
+  it("/agent <name> switches to a valid agent and confirms it", () => {
+    const h = host();
+    runSlashCommand("/agent scan", h);
+    expect(h.setAgent).toHaveBeenCalledWith("scan");
+    expect(h.notify).toHaveBeenCalledWith("Agent: scan — find security vulnerabilities (read-only).");
+  });
+
+  it("/agent <name> warns that plan mode still blocks edits and saving the report", () => {
+    const h = host({ mode: "plan" });
+    runSlashCommand("/agent fix", h);
+    expect(h.setAgent).toHaveBeenCalledWith("fix");
+    expect(vi.mocked(h.notify).mock.calls[0]![0]).toContain("Plan mode is on");
+    const h2 = host({ mode: "default" });
+    runSlashCommand("/agent fix", h2);
+    expect(vi.mocked(h2.notify).mock.calls[0]![0]).not.toContain("Plan mode");
+  });
+
+  it("/agent off returns to the general agent", () => {
+    const h = host({ agent: "fix" });
+    runSlashCommand("/agent off", h);
+    expect(h.setAgent).toHaveBeenCalledWith(undefined);
+    expect(h.notify).toHaveBeenCalledWith("Agent: off (general agent)");
+  });
+
+  it("/agent <bad> reports the valid agents and changes nothing", () => {
+    const h = host();
+    runSlashCommand("/agent hack", h);
+    expect(h.setAgent).not.toHaveBeenCalled();
+    const shown = vi.mocked(h.notify).mock.calls[0]![0];
+    expect(shown).toContain('Unknown agent "hack"');
+    expect(shown).toContain("scan, suggest, fix");
   });
 
   it("/theme with no argument shows the current theme and the choices", () => {

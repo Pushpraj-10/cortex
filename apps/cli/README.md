@@ -7,6 +7,7 @@ The terminal app: an [Ink](https://github.com/vadimdemedes/ink) UI over `@cortex
 ```
 npm run dev                          # full-screen UI (needs a real terminal)
 npm run dev -- --mode plan           # start in a permission mode
+npm run dev -- --agent scan          # start as an agent: scan | suggest | fix
 npm run dev -- -p "explain src/a.ts" # one shot: answer on stdout, tool calls on stderr
 npm run build                        # bundle the installable package into dist/ (see build.mjs)
 ```

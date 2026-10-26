@@ -8,6 +8,8 @@ import { useTheme } from "../theme/ThemeContext.js";
 
 interface StatusLineProps extends StatusParts {
   mode: string;
+  /** The active agent (scan, suggest, fix), if any; named first on the left. */
+  agent?: string;
 }
 
 /** How each non-default permission mode is announced; the default mode says nothing. */
@@ -32,14 +34,16 @@ const MAX_MODEL_WIDTH_WANTED = 28;
  * surprise. On the right, as many of these as fit, most important first: the model, how full the context is, the folder
  * and the git branch; a narrow terminal loses the folder first and the model last (see `layoutStatus`).
  */
-export function StatusLine({ mode, ...parts }: StatusLineProps) {
+export function StatusLine({ mode, agent, ...parts }: StatusLineProps) {
   const theme = useTheme();
   const { columns } = useTerminalSize();
   const note = MODE_NOTES[mode];
 
   // The mode note comes first and the cycle hint is dropped when there is not room for it and a little of the right side too;
   // if even the note is wider than the terminal it is cut, so the line never wraps.
-  const variants = note ? [`⏵⏵ ${note}${MODE_CYCLE_HINT}`, `⏵⏵ ${note}`] : [shortcutsHint];
+  const agentLead = agent ? `${agent} agent · ` : "";
+  const variants = (note ? [`⏵⏵ ${note}${MODE_CYCLE_HINT}`, `⏵⏵ ${note}`] : [shortcutsHint]).map((text) => agentLead + text);
+  const lead = agentLead ? <Text color={theme.secondary}>{agentLead}</Text> : null;
   const wanted = Math.min(displayWidth(parts.model), MAX_MODEL_WIDTH_WANTED);
   const leftText = variants.find((text) => displayWidth(text) + wanted + PADDING + GAP <= columns) ?? variants[variants.length - 1]!;
   const leftWidth = Math.min(displayWidth(leftText), Math.max(0, columns - PADDING));
@@ -58,11 +62,13 @@ export function StatusLine({ mode, ...parts }: StatusLineProps) {
       <Box flexShrink={0} width={leftWidth}>
         {note ? (
           <Text color={theme.muted} wrap="truncate-end">
+            {lead}
             <Text color={theme.primary}>⏵⏵ {note}</Text>
             {leftText.endsWith(MODE_CYCLE_HINT) ? MODE_CYCLE_HINT : ""}
           </Text>
         ) : (
           <Text color={theme.muted} wrap="truncate-end">
+            {lead}
             {shortcutsHint}
           </Text>
         )}

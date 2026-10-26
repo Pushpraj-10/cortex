@@ -4,8 +4,11 @@ import { StatusLine } from "../../../src/ui/components/StatusLine.js";
 import { displayWidth } from "../../../src/format/table.js";
 import { renderFrame } from "../support/render-frame.js";
 
-const draw = (props: { model?: string; mode?: string; cwd?: string }, width = 80) =>
-  renderFrame(<StatusLine model={props.model ?? "llama3.1 (ollama)"} mode={props.mode ?? "default"} cwd={props.cwd ?? "D:\\proj\\demo"} />, width);
+const draw = (props: { model?: string; mode?: string; cwd?: string; agent?: string }, width = 80) =>
+  renderFrame(
+    <StatusLine model={props.model ?? "llama3.1 (ollama)"} mode={props.mode ?? "default"} agent={props.agent} cwd={props.cwd ?? "D:\\proj\\demo"} />,
+    width,
+  );
 
 describe("StatusLine", () => {
   it("says '? for shortcuts' on the left and the model and folder on the right", async () => {
@@ -23,6 +26,27 @@ describe("StatusLine", () => {
     const line = await draw({ mode });
     expect(line).toContain(text);
     expect(line).not.toContain("? for shortcuts");
+  });
+
+  it("names the active agent first on the left, before the shortcuts hint or the permission mode", async () => {
+    const plain = await draw({ agent: "scan" });
+    expect(plain.startsWith(" scan agent · ? for shortcuts")).toBe(true);
+    expect(plain.endsWith("llama3.1 (ollama) · D:\\proj\\demo")).toBe(true);
+
+    const planning = await draw({ agent: "fix", mode: "plan" });
+    expect(planning.startsWith(" fix agent · ⏵⏵ plan mode on")).toBe(true);
+  });
+
+  it("says nothing about an agent when none is active", async () => {
+    expect(await draw({})).not.toContain("agent");
+  });
+
+  it.each(["default", "acceptEdits", "plan", "bypassPermissions"])("stays one row that fits at every width with an agent active (%s mode)", async (mode) => {
+    for (let width = 20; width <= 140; width += 5) {
+      const line = await draw({ mode, agent: "suggest" }, width);
+      expect(line.split("\n"), `width ${width}`).toHaveLength(1);
+      expect(displayWidth(line), `width ${width}`).toBeLessThanOrEqual(width);
+    }
   });
 
   it("keeps the model and cuts a long folder from its start, in one row that fits", async () => {

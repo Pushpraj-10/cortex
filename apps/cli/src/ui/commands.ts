@@ -2,6 +2,7 @@
  * Slash commands typed into the input box. They act on the UI and the session (clear it, switch
  * the permission mode, quit) and never reach the model.
  */
+import { AGENT_MODE_IDS, getAgentMode, isAgentModeId, listAgentModes, type AgentModeId } from "@cortex/agent";
 import { PERMISSION_MODES, isPermissionMode, type PermissionMode } from "@cortex/policy";
 import { PROVIDER_IDS, isProviderId, type ProviderId } from "../provider/config.js";
 import { THEME_NAMES, isThemeName, type ThemeName } from "./theme/themes.js";
@@ -11,6 +12,7 @@ export const slashCommands: SlashCommand[] = [
   { name: "help", description: "Show commands and keyboard shortcuts" },
   { name: "clear", description: "Start a new conversation" },
   { name: "mode", description: "Show or set the permission mode" },
+  { name: "agent", description: "Show or switch the agent (scan, suggest, fix)" },
   { name: "provider", description: "Set up a provider's API key and model" },
   { name: "model", description: "Show the active model and provider" },
   { name: "theme", description: "Show or switch the color theme" },
@@ -23,6 +25,7 @@ export const HELP_TEXT = [
   "",
   "Keys: enter send · shift+enter newline · shift+tab next mode · esc interrupt · ctrl+t expand last tool call · ctrl+c quit",
   `Modes: ${PERMISSION_MODES.join(" | ")}`,
+  `Agents: ${AGENT_MODE_IDS.join(" | ")} — /agent <name> switches; /agent off returns to the general agent`,
   `Providers: ${PROVIDER_IDS.join(" | ")} — /provider <name> sets one up; /provider remove <name> forgets its saved key`,
   `Themes: ${THEME_NAMES.join(" | ")} — /theme <name> switches and remembers it`,
 ].join("\n");
@@ -34,6 +37,9 @@ export interface CommandHost {
   provider: string;
   theme: ThemeName;
   setMode(mode: PermissionMode): void;
+  /** The active agent (scan, suggest, fix); undefined is the general agent. */
+  agent: AgentModeId | undefined;
+  setAgent(agent: AgentModeId | undefined): void;
   /** Switches the colours now and remembers the choice. */
   setTheme(theme: ThemeName): void;
   /** Starts the guided setup, at the picker or straight at one provider. */
@@ -90,6 +96,28 @@ export function runSlashCommand(line: string, host: CommandHost): boolean {
         host.openProviderSetup(first);
       } else {
         host.notify(`Unknown provider "${first}". Use one of: ${PROVIDER_IDS.join(", ")}.`);
+      }
+      break;
+    }
+    case "agent": {
+      const requested = rest[0];
+      if (requested === undefined) {
+        host.notify(
+          [
+            `Agent: ${host.agent ?? "none (general agent)"}. Set one with /agent <${AGENT_MODE_IDS.join("|")}|off>.`,
+            ...listAgentModes().map((agent) => `  ${agent.id.padEnd(7)} ${agent.description}`),
+          ].join("\n"),
+        );
+      } else if (requested.toLowerCase() === "off") {
+        host.setAgent(undefined);
+        host.notify("Agent: off (general agent)");
+      } else if (isAgentModeId(requested)) {
+        host.setAgent(requested);
+        // Plan mode denies every edit, which includes saving the report, so say so rather than let it fail mid-task.
+        const planNote = host.mode === "plan" ? " Plan mode is on, so edits and saving reports are denied; change it with /mode." : "";
+        host.notify(`Agent: ${requested} — ${getAgentMode(requested).description}.${planNote}`);
+      } else {
+        host.notify(`Unknown agent "${requested}". Use one of: ${AGENT_MODE_IDS.join(", ")}, or off.`);
       }
       break;
     }

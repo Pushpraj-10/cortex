@@ -8,6 +8,7 @@ import {
   createAgentSession,
   createTaskTool,
   createToolsExecutor,
+  type AgentModeId,
   type AgentPolicy,
   type AgentSession,
 } from "@cortex/agent";
@@ -37,6 +38,8 @@ export interface BootOptions {
   cwd: string;
   /** From `--mode`; overrides the `defaultMode` in settings. */
   mode?: PermissionMode;
+  /** From `--agent`; the agent the session starts as. Undefined is the general agent. */
+  agent?: AgentModeId;
   /** False for `-p` runs, where no one can answer an approval prompt or set up a provider. */
   interactive: boolean;
   /** Defaults to process.env. */
@@ -113,6 +116,7 @@ export async function bootstrap(options: BootOptions): Promise<Result<Boot>> {
   const permissions = createPermissionBridge();
   const policy: AgentPolicy = {
     mode: options.mode ?? settings.permissions.defaultMode ?? "default",
+    agent: options.agent,
     rules: { allow: settings.permissions.allow, deny: settings.permissions.deny },
     hooks: settings.hooks,
     askPermission: options.interactive ? permissions.ask : refuseNonInteractively,
