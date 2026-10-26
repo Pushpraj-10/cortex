@@ -17,11 +17,11 @@ import { useChat } from "./hooks/useChat.js";
 import { historyMatches, stepHistorySearch, useInputHistory, type HistorySearch } from "./hooks/useInputHistory.js";
 import { useProviderSetup } from "./hooks/useProviderSetup.js";
 import { activeMention, completeMention, rankFiles } from "../format/file-mentions.js";
-import { editFor, mentionMenuAction, useHomeEnd, type EdgeKey } from "./hooks/keys.js";
+import { editFor, isMouseReport, mentionMenuAction, useHomeEnd, useMouseWheel, type EdgeKey } from "./hooks/keys.js";
 import { useWorkspaceFiles } from "./hooks/useWorkspaceFiles.js";
 import { useTranscriptScroll } from "./hooks/useTranscriptScroll.js";
 import { continueLine, moveToLineEnd, moveToLineStart, moveVertical, normalizePaste, useTextInput } from "./hooks/useTextInput.js";
-import { TerminalSizeContext, useAltScreen, useTerminalSize } from "./hooks/terminal.js";
+import { TerminalSizeContext, useTerminalSize } from "./hooks/terminal.js";
 import { slashMenuRows, transcriptRows } from "./layout.js";
 import type { PermissionBridge } from "../runtime/permission-bridge.js";
 import type { ProviderManager } from "../provider/manager.js";
@@ -60,6 +60,9 @@ export interface AppProps {
 
 const noBranch = () => undefined;
 
+/** Rows the transcript scrolls for one notch of the mouse wheel. */
+const WHEEL_ROWS = 3;
+
 export function App({
   initialSession,
   newSession,
@@ -75,7 +78,6 @@ export function App({
   initialHistory,
   onHistoryAdd,
 }: AppProps) {
-  useAltScreen();
   const [themeName, setThemeName] = useState<ThemeName>(() => resolveThemeName(initialTheme, {}));
   const theme = getTheme(resolveThemeName(themeName));
   const { exit } = useApp();
@@ -212,6 +214,8 @@ export function App({
 
   useInput(
     (typed, key) => {
+      // Mouse reports (the wheel is handled by useMouseWheel below) are never text.
+      if (isMouseReport(typed)) return;
       if (key.ctrl && typed === "c") {
         chat.cancel();
         exit();
@@ -365,6 +369,8 @@ export function App({
 
   // Home and End: Ink's useInput does not report them. Same moments as typing: not during an approval, a turn or the provider picker.
   const typingAllowed = isRawModeSupported && !chat.pendingPermission && !chat.isThinking && setup.stage !== "select";
+  // The wheel scrolls the transcript at any moment, like page up and down, three rows to a notch.
+  useMouseWheel((notches) => (notches > 0 ? scroll.scrollUp(notches * WHEEL_ROWS) : scroll.scrollDown(-notches * WHEEL_ROWS)), isRawModeSupported);
   useHomeEnd((edge: EdgeKey) => input.apply(edge === "home" ? moveToLineStart : moveToLineEnd), typingAllowed);
 
   const request = chat.pendingPermission;

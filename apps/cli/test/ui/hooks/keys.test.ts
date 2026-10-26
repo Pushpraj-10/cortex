@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { edgeKeyOf, editFor, mentionMenuAction, type EditingKey, type MenuKey } from "../../../src/ui/hooks/keys.js";
+import { edgeKeyOf, editFor, isMouseReport, mentionMenuAction, wheelRowsOf, type EditingKey, type MenuKey } from "../../../src/ui/hooks/keys.js";
 
 const noMenuKey: MenuKey = { upArrow: false, downArrow: false, tab: false, return: false, escape: false, shift: false, meta: false };
 const menuKey = (flags: Partial<MenuKey>, query = "src") => mentionMenuAction({ ...noMenuKey, ...flags }, query);
@@ -111,5 +111,42 @@ describe("mentionMenuAction", () => {
 
   it("lets everything else through, so typing narrows the list", () => {
     expect(menuKey({})).toBeUndefined();
+  });
+});
+
+describe("wheelRowsOf", () => {
+  const report = (button: number, suffix = "M") => `\u001b[<${button};10;5${suffix}`;
+
+  it("counts a wheel notch up as +1 and down as -1", () => {
+    expect(wheelRowsOf(report(64))).toBe(1);
+    expect(wheelRowsOf(report(65))).toBe(-1);
+  });
+
+  it("still reads a notch made with shift, alt or ctrl held", () => {
+    expect(wheelRowsOf(report(64 + 4))).toBe(1);
+    expect(wheelRowsOf(report(65 + 16))).toBe(-1);
+  });
+
+  it("adds up several notches that arrive in one chunk", () => {
+    expect(wheelRowsOf(report(64) + report(64) + report(65))).toBe(1);
+  });
+
+  it("ignores clicks, drags, releases and ordinary keys", () => {
+    expect(wheelRowsOf(report(0))).toBe(0);
+    expect(wheelRowsOf(report(0, "m"))).toBe(0);
+    expect(wheelRowsOf(report(32))).toBe(0);
+    expect(wheelRowsOf("hello")).toBe(0);
+  });
+});
+
+describe("isMouseReport", () => {
+  it("recognises a report as Ink hands it to useInput, without the leading escape", () => {
+    expect(isMouseReport("[<64;10;5M")).toBe(true);
+    expect(isMouseReport("[<0;3;4m")).toBe(true);
+  });
+
+  it("does not take typed text for one", () => {
+    expect(isMouseReport("[<")).toBe(false);
+    expect(isMouseReport("hello")).toBe(false);
   });
 });

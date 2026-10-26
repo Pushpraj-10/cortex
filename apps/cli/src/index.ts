@@ -10,6 +10,8 @@ import { loadDotEnv } from "./cli/env.js";
 import { runOnce } from "./cli/run-once.js";
 import { readGitBranch } from "./cli/git-branch.js";
 import { readVersion } from "./cli/version.js";
+import { farewell } from "./cli/farewell.js";
+import { enterAltScreen, leaveAltScreen } from "./ui/hooks/terminal.js";
 
 const args = parseArgs(process.argv.slice(2));
 if (!args.ok) {
@@ -38,6 +40,7 @@ if (args.value.prompt !== undefined) {
 }
 
 const [preferences, initialHistory] = await Promise.all([loadPreferences(), loadHistory(cwd)]);
+enterAltScreen();
 const app = render(
   React.createElement(App, {
     initialSession,
@@ -58,4 +61,6 @@ const app = render(
   }),
 );
 await app.waitUntilExit();
+await leaveAltScreen();
 close();
+console.log(`\n${farewell()}\n`);
