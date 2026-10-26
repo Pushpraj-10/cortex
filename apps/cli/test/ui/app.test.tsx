@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { AgentModeId, AgentPolicy, AgentSession } from "@cortex/agent";
+import { createPermissionBridge } from "../../src/runtime/permission-bridge.js";
+import { slashCommands } from "../../src/ui/commands.js";
 import { KEY, driveApp, type DrivenApp } from "./support/drive-app.js";
 import { settle } from "./support/render-frame.js";
 
@@ -81,6 +83,81 @@ describe("App: /agent", () => {
     await a.press(KEY.enter);
     expect(policy.agent).toBe("suggest");
     expect(a.screen()).toContain("suggest agent");
+  });
+});
+
+describe("App: menus and prompts are drawn over the transcript", () => {
+  const size = { rows: 24, columns: 80 };
+  /** The input box is 3 rows (one of text) and the status line 1, so a quiet screen has 20 rows of transcript. */
+  const TRANSCRIPT_ROWS = 24 - 3 - 1;
+
+  /** Sends `count` one-word messages. */
+  async function sendMessages(a: DrivenApp, count: number) {
+    for (let i = 0; i < count; i += 1) {
+      await a.press(`m${i}`);
+      await a.press(KEY.enter);
+    }
+  }
+
+  it("opens the / menu over the bottom of the transcript, and the rows above it do not move", async () => {
+    const a = await start(size);
+    await sendMessages(a, 20);
+    const before = a.screen().split("\n");
+
+    await a.press("/");
+    const after = a.screen().split("\n");
+
+    const menuRows = slashCommands.length + 2;
+    expect(after).toHaveLength(24);
+    expect(after.slice(0, TRANSCRIPT_ROWS - menuRows)).toEqual(before.slice(0, TRANSCRIPT_ROWS - menuRows));
+    expect(after.slice(TRANSCRIPT_ROWS - menuRows, TRANSCRIPT_ROWS).join("\n")).toContain("/help");
+    expect(after[TRANSCRIPT_ROWS + 1]).toContain("> /"); // the input box is where it was, just under the menu
+    expect(after[23]).toBe(before[23]);
+  });
+
+  it("closes the / menu and puts the transcript back as it was", async () => {
+    const a = await start(size);
+    await sendMessages(a, 20);
+    const before = a.screen().split("\n");
+
+    await a.press("/");
+    await a.press(KEY.backspace);
+    expect(a.screen().split("\n").slice(0, TRANSCRIPT_ROWS)).toEqual(before.slice(0, TRANSCRIPT_ROWS));
+  });
+
+  it("shows the approval prompt over the transcript without moving it", async () => {
+    // The 20th message either waits forever or asks to edit a file; everything before it is the same.
+    const sessionWhose = (twentieth: () => Promise<unknown>): AgentSession => {
+      let calls = 0;
+      return {
+        // eslint-disable-next-line require-yield
+        async *chat() {
+          calls += 1;
+          if (calls === 20) await twentieth();
+        },
+      };
+    };
+    const run = async (twentieth: (permissions: ReturnType<typeof createPermissionBridge>) => Promise<unknown>) => {
+      const permissions = createPermissionBridge();
+      const a = await start({ ...size, permissions, initialSession: sessionWhose(() => twentieth(permissions)) });
+      await sendMessages(a, 20);
+      const screen = a.screen().split("\n");
+      await a.unmount();
+      app = undefined;
+      return screen;
+    };
+
+    const waiting = await run(() => new Promise(() => undefined));
+    const asking = await run((permissions) => permissions.ask("edit_file", { path: "a.ts" }));
+
+    // While the agent works there is one thinking row; the prompt (4 rows) is drawn over that row and the 3 above it.
+    const promptRows = 4;
+    const unmoved = TRANSCRIPT_ROWS - 1 - (promptRows - 1);
+    expect(asking).toHaveLength(24);
+    expect(asking.join("\n")).toContain("Allow Run edit_file?"); // no tools are registered here, so the summary falls back to the tool's name
+    expect(asking.join("\n")).toContain("y / enter allow");
+    expect(asking.slice(0, unmoved)).toEqual(waiting.slice(0, unmoved));
+    expect(asking[23]).toBe(waiting[23]);
   });
 });
 

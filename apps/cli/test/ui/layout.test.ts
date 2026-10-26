@@ -26,16 +26,20 @@ describe("slashMenuRows", () => {
 });
 
 describe("transcriptRows", () => {
-  const base = { rows: 40, inputValue: "", thinking: false, slashMenuRows: 0, promptRows: 0 };
+  const base = { rows: 40, inputValue: "", thinking: false };
 
   it("leaves the screen minus the input box (1 row + border) and the status line", () => {
     expect(transcriptRows(base)).toBe(40 - 3 - 1);
   });
 
-  it("gives up one row to the thinking indicator and more to menus and prompts", () => {
+  it("gives up one row to the thinking indicator", () => {
     expect(transcriptRows({ ...base, thinking: true })).toBe(transcriptRows(base) - 1);
-    expect(transcriptRows({ ...base, slashMenuRows: 5 })).toBe(transcriptRows(base) - 5);
-    expect(transcriptRows({ ...base, promptRows: 4 })).toBe(transcriptRows(base) - 4);
+  });
+
+  it("takes no rows for menus and prompts, which are drawn over the transcript instead", () => {
+    // LayoutInput has no field for them, so a menu or prompt opening cannot change the transcript's height.
+    expect(Object.keys(base)).toEqual(["rows", "inputValue", "thinking"]);
+    expect(transcriptRows(base)).toBe(40 - 3 - 1);
   });
 
   it("gives up one row to the ctrl+r search line while it is showing", () => {

@@ -2,6 +2,9 @@
  * Vertical layout of the full-screen view. The transcript takes whatever rows the fixed-height
  * pieces below it leave, so those heights are computed in one place instead of being scattered
  * through the component. A bordered box costs 2 extra rows (top and bottom border).
+ *
+ * Menus and prompts are not among those pieces: they are drawn over the bottom of the transcript
+ * (see components/Overlay.tsx), so opening one never changes how many rows the transcript has.
  */
 import { maxInputBoxLines } from "./theme/copy.js";
 
@@ -16,7 +19,7 @@ export function inputTextRows(value: string): number {
   return Math.min(Math.max(1, value.split("\n").length), maxInputBoxLines);
 }
 
-/** Rows the slash-command menu occupies: one per match (or one "no matches" row), plus borders; 0 when closed. */
+/** Rows the slash-command menu draws: one per match (or one "no matches" row), plus borders; 0 when closed. */
 export function slashMenuRows(open: boolean, matchCount: number): number {
   return open ? Math.max(1, matchCount) + BORDER_ROWS : 0;
 }
@@ -27,9 +30,6 @@ export interface LayoutInput {
   thinking: boolean;
   /** True while the ctrl+r search line is showing above the input box. */
   historySearch?: boolean;
-  slashMenuRows: number;
-  /** Rows of the permission prompt, or 0 when none is showing. */
-  promptRows: number;
 }
 
 /** Rows left for the transcript. Never fewer than 3, so it stays usable on a tiny terminal. */
@@ -39,8 +39,6 @@ export function transcriptRows(input: LayoutInput): number {
     BORDER_ROWS +
     (input.thinking ? THINKING_ROWS : 0) +
     (input.historySearch ? SEARCH_ROWS : 0) +
-    input.slashMenuRows +
-    input.promptRows +
     STATUS_LINE_ROWS;
   return Math.max(MIN_TRANSCRIPT_ROWS, input.rows - reserved);
 }

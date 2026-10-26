@@ -8,6 +8,7 @@ import { HELP_TEXT, runSlashCommand, slashCommands, type CommandHost } from "./c
 import { HistorySearchLine } from "./components/HistorySearchLine.js";
 import { InputBox } from "./components/InputBox.js";
 import { MessageList } from "./components/Messages.js";
+import { Overlay } from "./components/Overlay.js";
 import { PermissionPrompt, SETUP_PROMPT_ROWS, SetupPrompt, permissionPromptRows } from "./components/Prompts.js";
 import { SlashCommandMenu } from "./components/SlashCommandMenu.js";
 import { StatusLine } from "./components/StatusLine.js";
@@ -382,20 +383,48 @@ export function App({
   useHomeEnd((edge: EdgeKey) => input.apply(edge === "home" ? moveToLineStart : moveToLineEnd), typingAllowed);
 
   const request = chat.pendingPermission;
-  // How much of a diff the approval prompt may show: up to 12 lines, fewer on a short terminal so the transcript keeps its rows.
+  // How much of a diff the approval prompt may show: up to 12 lines, fewer on a short terminal so it does not cover all of the transcript.
   const maxPreviewLines = Math.max(3, Math.min(12, rows - 18));
-  const showThinking = chat.isThinking && !request;
   const pickerOpen = setup.stage === "select";
-  const listHeight = transcriptRows({
-    rows,
-    inputValue: shownValue,
-    thinking: showThinking,
-    historySearch: search !== null,
-    slashMenuRows: mentionMenuOpen
-      ? slashMenuRows(true, mentionMatches.length)
-      : slashMenuRows(slashMenuOpen || pickerOpen, pickerOpen ? setup.menu.length : filteredCommands.length),
-    promptRows: request ? permissionPromptRows(chat.pendingPreview, maxPreviewLines) : setup.prompt ? SETUP_PROMPT_ROWS : 0,
-  });
+  // The thinking row stays reserved while an approval is pending (a blank row stands in for it), so the transcript does not move when the prompt appears.
+  const listHeight = transcriptRows({ rows, inputValue: shownValue, thinking: chat.isThinking, historySearch: search !== null });
+
+  // Menus and prompts are drawn over the bottom of the transcript, not under it, so opening one moves nothing.
+  // Only one at a time: an approval comes first, then a /provider question, then the menus.
+  let overlay: { rows: number; content: React.ReactNode } | undefined;
+  if (request) {
+    overlay = {
+      rows: permissionPromptRows(chat.pendingPreview, maxPreviewLines),
+      content: (
+        <PermissionPrompt
+          summary={summarizeToolCall(request.toolName, request.args)}
+          preview={chat.pendingPreview}
+          width={columns}
+          maxPreviewLines={maxPreviewLines}
+        />
+      ),
+    };
+  } else if (setup.prompt) {
+    overlay = {
+      rows: SETUP_PROMPT_ROWS,
+      content: <SetupPrompt title={setup.prompt.title} label={setup.prompt.label} hint={setup.prompt.hint} error={setup.prompt.error} />,
+    };
+  } else if (pickerOpen) {
+    overlay = {
+      rows: slashMenuRows(true, setup.menu.length),
+      content: <SlashCommandMenu commands={setup.menu} selectedIndex={setup.selectedIndex} prefix="" />,
+    };
+  } else if (mentionMenuOpen) {
+    overlay = {
+      rows: slashMenuRows(true, mentionMatches.length),
+      content: <SlashCommandMenu commands={mentionItems} selectedIndex={clampedMentionIndex} prefix="" truncate="start" />,
+    };
+  } else if (slashMenuOpen) {
+    overlay = {
+      rows: slashMenuRows(true, filteredCommands.length),
+      content: <SlashCommandMenu commands={filteredCommands} selectedIndex={clampedSlashIndex} />,
+    };
+  }
 
   return (
     <ThemeContext.Provider value={theme}>
@@ -410,19 +439,8 @@ export function App({
             scrollOffset={scroll.offset}
             onMeasure={scroll.onMeasure}
           />
-          {showThinking && <ThinkingIndicator active outputChars={chat.outputChars} />}
-          {request && (
-            <PermissionPrompt
-              summary={summarizeToolCall(request.toolName, request.args)}
-              preview={chat.pendingPreview}
-              width={columns}
-              maxPreviewLines={maxPreviewLines}
-            />
-          )}
-          {pickerOpen && <SlashCommandMenu commands={setup.menu} selectedIndex={setup.selectedIndex} prefix="" />}
-          {setup.prompt && <SetupPrompt title={setup.prompt.title} label={setup.prompt.label} hint={setup.prompt.hint} error={setup.prompt.error} />}
-          {slashMenuOpen && <SlashCommandMenu commands={filteredCommands} selectedIndex={clampedSlashIndex} />}
-          {mentionMenuOpen && <SlashCommandMenu commands={mentionItems} selectedIndex={clampedMentionIndex} prefix="" truncate="start" />}
+          {chat.isThinking && (request ? <Box height={1} /> : <ThinkingIndicator active outputChars={chat.outputChars} />)}
+          {overlay && <Overlay rows={overlay.rows}>{overlay.content}</Overlay>}
           {search && (
             <HistorySearchLine
               query={search.query}
