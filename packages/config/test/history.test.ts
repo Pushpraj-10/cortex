@@ -104,7 +104,7 @@ describe("appendHistory", () => {
     const loaded = await loadHistory(project, home);
     expect(loaded).toHaveLength(MAX_HISTORY_ENTRIES);
     expect(loaded.at(-1)).toBe(message(1199));
-  });
+  }, 30_000); // 1200 sequential file writes: quick alone, but over the default 5s when every test file runs at once
 
   it("rejects when the file cannot be written, for the caller to catch", async () => {
     await fs.mkdir(path.dirname(historyPath(project, home)), { recursive: true });
