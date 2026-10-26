@@ -3,9 +3,10 @@
  * background", never for a hex value, so a theme is a complete restyle and nothing else changes.
  * `undefined` means "the terminal's own default", which is what the mono theme uses throughout.
  *
- * The palette is deliberately quiet: two soft brand colours (a dusty blue and a sage green), neutral
- * greys, and muted amber and rose for warnings and errors. Nothing is saturated enough to glow. Syntax
- * colours are drawn from the same few hues, so code, prose and chrome read as one design.
+ * The palette follows the logo: its red as the brand colour, its off-white as the supporting colour, and
+ * neutral greys between. Errors are a lighter, pinker red than the brand so they never read as ordinary
+ * chrome; success and warning stay muted green and amber. Syntax colours are drawn from the same few hues,
+ * so code, prose and chrome read as one design.
  */
 
 export const THEME_NAMES = ["dark", "light", "mono"] as const;
@@ -39,26 +40,26 @@ export interface Theme {
 
 const dark: Theme = {
   name: "dark",
-  primary: "#9DB7D5", // dusty blue
-  secondary: "#A8C3A0", // sage
-  muted: "#8B93A1",
-  border: "#4A5160",
-  inputBackground: "#171B21",
-  status: { success: "#A8C3A0", warning: "#D9B77E", error: "#D98A8F" },
-  diff: { added: "#1F2E26", removed: "#35252A" },
-  syntax: { keyword: "#9DB7D5", string: "#A8C3A0", number: "#D9B77E", comment: "#7C8798", title: "#B8CCE4", type: "#A8C3A0", builtin: "#D9B77E" },
+  primary: "#F8333C", // the logo's red
+  secondary: "#E8E8E8", // the logo's off-white
+  muted: "#8C8C8C",
+  border: "#3D3D3D",
+  inputBackground: "#161616",
+  status: { success: "#8FC79A", warning: "#D9B77E", error: "#FF7A85" },
+  diff: { added: "#16281C", removed: "#3A1A1E" },
+  syntax: { keyword: "#FF5A63", string: "#8FC79A", number: "#D9B77E", comment: "#858585", title: "#F5F5F5", type: "#8FC79A", builtin: "#D9B77E" },
 };
 
 const light: Theme = {
   name: "light",
-  primary: "#3F6E94",
-  secondary: "#4D7A4F",
-  muted: "#5C6370",
-  border: "#C9CFDA",
-  inputBackground: "#F1F3F5",
-  status: { success: "#4D7A4F", warning: "#7B6637", error: "#B03A48" },
-  diff: { added: "#DDEBDD", removed: "#F3DDDF" },
-  syntax: { keyword: "#3F6E94", string: "#4D7A4F", number: "#7B6637", comment: "#6B7280", title: "#2F5F87", type: "#4D7A4F", builtin: "#7B6637" },
+  primary: "#D4101A",
+  secondary: "#2B2B2B",
+  muted: "#5F5F5F",
+  border: "#D6D6D6",
+  inputBackground: "#F3F3F3",
+  status: { success: "#3F7A4A", warning: "#7B6637", error: "#A3182A" },
+  diff: { added: "#DDEBDD", removed: "#F5DCDE" },
+  syntax: { keyword: "#C4101A", string: "#3F7A4A", number: "#7B6637", comment: "#6B6B6B", title: "#1F1F1F", type: "#3F7A4A", builtin: "#7B6637" },
 };
 
 const mono: Theme = {

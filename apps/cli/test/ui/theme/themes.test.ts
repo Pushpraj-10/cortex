@@ -57,14 +57,15 @@ describe("themes", () => {
     }
   });
 
-  it("keeps every coloured token soft: nothing is saturated enough to glow", () => {
+  it("keeps every coloured token soft except the logo's red and the reds drawn from it", () => {
     for (const name of ["dark", "light"] as const) {
       const theme = getTheme(name);
+      const reds = new Set(["primary", "error", "keyword"]);
       for (const [label, colour] of Object.entries({ primary: theme.primary, secondary: theme.secondary, ...theme.status, ...theme.syntax })) {
+        if (reds.has(label)) continue;
         expect(saturation(colour as string), `${name} ${label} ${colour}`).toBeLessThan(0.6);
       }
-      expect(saturation(theme.primary as string)).toBeLessThan(0.5);
-      expect(saturation(theme.secondary as string)).toBeLessThan(0.5);
+      expect(saturation(theme.secondary as string)).toBeLessThan(0.1); // the off-white is neutral
     }
   });
 
