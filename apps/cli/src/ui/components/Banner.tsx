@@ -52,7 +52,7 @@ export function Banner({ cwd, version }: BannerProps) {
 
   return (
     <Box flexDirection="column" marginBottom={1}>
-      <Box>
+      <Box alignItems="center">
         <Emblem art={art} />
         <Box flexDirection="column" justifyContent="center" marginLeft={EMBLEM_GAP} flexShrink={1}>
           <Logo columns={columns - emblemWidth - EMBLEM_GAP} />

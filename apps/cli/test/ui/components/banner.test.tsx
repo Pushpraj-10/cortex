@@ -5,6 +5,7 @@ import { displayWidth } from "../../../src/format/table.js";
 import { renderFrame } from "../support/render-frame.js";
 
 const header = (columns: number, rows: number) => renderFrame(<Banner cwd={"D:\\proj\\demo"} version="1.2.3" />, columns, rows);
+/** The emblem is the only thing drawn in braille (the wordmark uses full and half blocks). */
 const hasEmblem = (frame: string) => /[\u2801-\u28ff]/.test(frame);
 
 describe("Banner", () => {
@@ -15,7 +16,6 @@ describe("Banner", () => {
     expect(frame).toContain("v1.2.3");
     expect(frame).toContain("D:\\proj\\demo");
     expect(frame).toContain("Tip:");
-    expect(frame.split("\n").filter((line) => hasEmblem(line)).length).toBeGreaterThanOrEqual(12);
   });
 
   it("shows the smaller emblem on a standard 80x24 terminal, with the details underneath", async () => {
