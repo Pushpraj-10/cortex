@@ -60,6 +60,12 @@ describe("MessageList: a transcript taller than its viewport", () => {
     expect(frame).toContain("> message number 0");
     expect(frame).toContain("message number 1");
   });
+
+  it("starts a short conversation on the first row, with the banner there rather than just above the input bar", async () => {
+    const rows = (await draw(2, 40)).split("\n");
+    expect(rows[0]!.trim()).not.toBe("");
+    expect(rows.findIndex((row) => row.includes("v0"))).toBeLessThan(10);
+  });
 });
 
 describe("MessageList: scrolling", () => {

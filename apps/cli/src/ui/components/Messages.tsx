@@ -1,5 +1,5 @@
 /** The transcript: the scrolling viewport and the three things in it — messages, tool calls and notices. */
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Box, Text, measureElement, type DOMElement } from "ink";
 import { displayWidth } from "../../format/table.js";
 import { useTheme } from "../theme/ThemeContext.js";
@@ -95,10 +95,10 @@ function ScrollNotice({ rows, columns }: { rows: number; columns: number }) {
 }
 
 /**
- * Fixed-height viewport anchored to its bottom: the inner column can grow past `height`, but
- * `overflow="hidden"` clips it and `justifyContent="flex-end"` anchors the clip to the end, so the
- * newest content stays visible and older content scrolls off the top — a tail -f effect handled
- * entirely by Yoga's flex layout, no manual line-counting needed.
+ * Fixed-height viewport. While the transcript fits, it starts at the top (the banner is the first row of the screen, as in
+ * Claude Code). Once it outgrows `height` it is anchored to the bottom: `overflow="hidden"` clips the inner column and
+ * `justifyContent="flex-end"` anchors the clip to the end, so the newest content stays visible and older content scrolls off
+ * the top — a tail -f effect handled entirely by Yoga's flex layout, no manual line-counting needed.
  *
  * The inner column must not shrink (`flexShrink={0}`). By default Yoga squeezes it, and everything in it, to fit the
  * viewport: rows overlap, spacing disappears, and what is left on screen is the start of the conversation instead of its end.
@@ -111,15 +111,20 @@ export function MessageList({ cwd, version, height, timeline, expandedToolCallId
 
   // The inner column keeps its full height (it does not shrink), so its measured height is the whole transcript's.
   const content = useRef<DOMElement>(null);
+  // Whether the whole transcript fits in the viewport. Until measured it is assumed to, so the banner starts at the top.
+  const [fits, setFits] = useState(true);
   useEffect(() => {
-    if (content.current && onMeasure) onMeasure(measureElement(content.current).height, viewport);
+    if (!content.current) return;
+    const contentHeight = measureElement(content.current).height;
+    setFits(contentHeight <= viewport); // the same value again does not render again
+    onMeasure?.(contentHeight, viewport);
   });
 
   // Scrolling is a negative bottom margin: it slides the column down past the viewport's bottom edge, which the clip hides,
   // bringing older rows in at the top.
   return (
     <Box height={height} flexDirection="column">
-      <Box height={viewport} overflow="hidden" flexDirection="column" justifyContent="flex-end">
+      <Box height={viewport} overflow="hidden" flexDirection="column" justifyContent={fits ? "flex-start" : "flex-end"}>
         <Box ref={content} flexDirection="column" flexShrink={0} marginBottom={-scrollOffset}>
           <Banner cwd={cwd} version={version} />
           {timeline.map((entry) => {
