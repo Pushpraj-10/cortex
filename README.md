@@ -1,31 +1,58 @@
-# Cortex
+<div align="center">
 
-A local-first CLI coding agent. It talks to a model — Ollama on your machine, or Google Gemini / Anthropic in the cloud — reads and edits your project through sandboxed tools, and asks before it does anything risky.
+<a href="https://github.com/Pushpraj-10/cortex">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Pushpraj-10/cortex/main/docs/assets/logo-dark.png">
+    <img src="https://raw.githubusercontent.com/Pushpraj-10/cortex/main/docs/assets/logo.png" alt="Cortex" width="220">
+  </picture>
+</a>
 
-## Install
+### An AI coding agent, right in your terminal.
 
-```
+Local-first. Works with **Ollama**, **Google Gemini** and **Anthropic**. Edits your project through sandboxed tools, and asks before it does anything risky.
+
+[![npm](https://img.shields.io/npm/v/@pushpraj_10/cortex?color=F8333C&label=npm)](https://www.npmjs.com/package/@pushpraj_10/cortex)
+[![license](https://img.shields.io/badge/license-MIT-F8333C)](LICENSE)
+[![node](https://img.shields.io/badge/node-%E2%89%A522.12-F8333C)](https://nodejs.org)
+[![typescript](https://img.shields.io/badge/built%20with-TypeScript-F8333C)](https://www.typescriptlang.org)
+
+[Install](#-install) · [Features](#-features) · [Usage](#-usage) · [Configuration](#%EF%B8%8F-configuration) · [Architecture](#-architecture) · [Contributing](#-development)
+
+<img src="https://raw.githubusercontent.com/Pushpraj-10/cortex/main/docs/assets/tui.png" alt="Cortex running in a terminal" width="860">
+
+</div>
+
+<br>
+
+## 🚀 Install
+
+```bash
 npm install -g @pushpraj_10/cortex
 cd your-project
-cortex                    # full-screen terminal UI, working on the current folder
-cortex -p "explain what src/index.ts does"    # one shot: answer to stdout
+cortex
 ```
 
-On first run, type `/provider` to pick a provider and save its API key and model; they are kept in `~/.cortex/credentials.json` (plain text, so treat it like any other secret). For Ollama, run `ollama serve`, pull a model that supports tool calling (for example `ollama pull llama3.1`), and set `OLLAMA_MODEL`.
+That opens the full-screen terminal UI on the current folder. On first run, type `/provider`, pick a provider, and paste an API key (typed hidden, never shown or logged). Or run a single prompt without the UI:
 
-Needs Node 22.12 or newer.
-
-## Run from source
-
-```
-npm install
-cp .env.example .env      # set OLLAMA_MODEL (local), or a cloud key + model
-npm run dev               # full-screen terminal UI
-npm run dev -- -p "explain what src/index.ts does"    # one shot: answer to stdout
-npm run build             # bundle the installable package into apps/cli/dist
+```bash
+cortex -p "explain what src/index.ts does"     # the answer goes to stdout
 ```
 
-## Using it
+> **Needs Node 22.12 or newer.** For Ollama, run `ollama serve`, pull a model that supports tool calling (for example `ollama pull llama3.1`), and set `OLLAMA_MODEL`.
+
+## ✨ Features
+
+- **Bring your own model.** Ollama on your machine, or Gemini and Anthropic in the cloud. Switch with `/provider` without restarting. Cloud providers are never chosen automatically, so a key exported for other tools can't start sending your code anywhere.
+- **Safe by default.** Reads run freely; edits and shell commands ask first. Four [permission modes](#permission-modes), allow and deny rules, and hooks that can block an action.
+- **Understands your project.** Name a file in your message and the agent is handed that file, its imports and tests, and what imports it. Type `@` to pick a file from a menu.
+- **A terminal UI that gets out of the way.** Streaming replies, syntax-highlighted code, readable diffs, expandable tool calls, a pinned input box, and a scrollable transcript (mouse wheel, `page up` / `page down`).
+- **Extensible.** Plug in [MCP servers](#%EF%B8%8F-configuration), write skills the model loads on demand, and keep project notes in `CORTEX.md`.
+- **Remembers what you said.** Messages are saved per project (`↑` to recall, `ctrl+r` to search). API keys never are.
+- **Open and model-driven.** No fixed analyze / plan / implement stages: each turn is shaped by the context the model is given and the tools it chooses to call.
+
+## 🧭 Usage
+
+### Commands
 
 | Command | What it does |
 | --- | --- |
@@ -37,9 +64,34 @@ npm run build             # bundle the installable package into apps/cli/dist
 | `/theme [name]` | show or switch the color theme (`dark`, `light`, `mono`); remembered in `~/.cortex/preferences.json`, and `NO_COLOR` always forces `mono` |
 | `/quit` | exit |
 
-Keys: `enter` sends, `shift+enter` (or `\` then `enter`) adds a newline, `shift+tab` cycles the permission mode, `esc` interrupts, `ctrl+t` expands the last tool call, `?` in an empty box shows these shortcuts, `ctrl+c` quits. The input box edits like a shell: `ctrl`/`alt` + arrows move by word, `home`/`end` and `ctrl+a`/`ctrl+e` go to the ends of the line, `ctrl+w`, `ctrl+u` and `ctrl+k` delete a word or to either end, and `↑` `↓` move between lines before they recall earlier messages. Name files in your message (`fix src/parser.ts`) and the agent is handed those files, their imports and tests, and what imports them; type `@` and a few letters to pick a file from a menu (`tab` or `enter` fills in its path). `page up` / `page down` scroll back through the conversation (at any time, even while the agent is working; sending a message jumps back to the end). `↑` recalls earlier messages and `ctrl+r` searches them (`enter` loads the match into the box to edit; it never sends it). The messages you send are remembered between sessions, per project, in `~/.cortex/history/` (plain text, readable by you only, the last 500); blank or very long messages are not saved, and nothing you enter in `/provider`, such as an API key, ever is.
+### Keys
 
-Flags: `--mode <mode>` sets the permission mode, `-p <prompt>` runs one prompt without the UI (tool calls go to stderr, the answer to stdout, and anything needing approval is refused unless the mode or a rule allows it).
+| Key | Action |
+| --- | --- |
+| `enter` | send |
+| `shift+enter`, or `\` then `enter` | new line |
+| `shift+tab` | cycle the permission mode |
+| `esc` | interrupt the agent |
+| `ctrl+t` | expand the last tool call |
+| `?` (empty box) | show the shortcuts |
+| `ctrl+c` | quit |
+| `@` + letters | pick a file from a menu (`tab` or `enter` fills in its path) |
+| `↑` / `↓` | move between lines, then recall earlier messages |
+| `ctrl+r` | search earlier messages (`enter` loads the match into the box; it never sends it) |
+| mouse wheel, `page up` / `page down` | scroll the conversation, any time, even while the agent works; sending a message jumps back to the end |
+| `ctrl`/`alt` + arrows, `home` / `end`, `ctrl+a` / `ctrl+e`, `ctrl+w`, `ctrl+u`, `ctrl+k` | edit like a shell |
+
+With the mouse wheel on, hold `shift` to select text with the mouse.
+
+Messages are remembered between sessions, per project, in `~/.cortex/history/` (plain text, readable by you only, the last 500). Blank or very long messages are not saved, and nothing you enter in `/provider`, such as an API key, ever is.
+
+### Flags
+
+| Flag | Meaning |
+| --- | --- |
+| `--mode <mode>` | set the permission mode |
+| `-p <prompt>` | run one prompt without the UI: tool calls go to stderr, the answer to stdout, and anything needing approval is refused unless the mode or a rule allows it |
+| `-h`, `--help` | show usage |
 
 ### Permission modes
 
@@ -52,17 +104,29 @@ Flags: `--mode <mode>` sets the permission mode, `-p <prompt>` runs one prompt w
 
 Deny rules always win, even in `bypassPermissions`.
 
-## Configuration
+## ⚙️ Configuration
 
-**Provider** — `CORTEX_PROVIDER` picks `ollama`, `google` or `anthropic`; if it is unset, Ollama is used. The cloud providers are never chosen automatically, so an API key exported for other tools can't start sending your code to a cloud. Each provider needs its model variable (`OLLAMA_MODEL`, `GOOGLE_MODEL`, `ANTHROPIC_MODEL`) and, for the cloud ones, a key (`GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`); see `.env.example`.
+**Provider.** `CORTEX_PROVIDER` picks `ollama`, `google` or `anthropic`; if it is unset, Ollama is used. Each provider needs its model variable (`OLLAMA_MODEL`, `GOOGLE_MODEL`, `ANTHROPIC_MODEL`) and, for the cloud ones, a key (`GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`). See [`.env.example`](.env.example).
 
-**Setting up a provider from the app** — no environment files needed: run `cortex`, type `/provider`, pick a provider and answer two questions (the API key is typed hidden, and never shown, logged or added to the conversation). It is saved and used straight away, and remembered next time. If nothing is configured yet the app still opens and tells you to do this.
+<details>
+<summary><b>Setting up a provider from the app</b> (no environment files needed)</summary>
 
-- **Where:** `~/.cortex/credentials.json` in your home directory — never in the project, so it can't be committed. It is written readable by you only (on Windows it relies on your user profile's folder permissions) and it is **plain text**, so prefer an environment variable if that doesn't suit you.
+<br>
+
+Run `cortex`, type `/provider`, pick a provider and answer two questions. The API key is typed hidden, and never shown, logged or added to the conversation. It is saved and used straight away, and remembered next time. If nothing is configured yet the app still opens and tells you to do this.
+
+- **Where:** `~/.cortex/credentials.json` in your home directory, never in the project, so it can't be committed. It is written readable by you only (on Windows it relies on your user profile's folder permissions) and it is **plain text**, so prefer an environment variable if that doesn't suit you.
 - **Precedence:** a set environment variable (`GOOGLE_API_KEY`, `CORTEX_PROVIDER`, …) beats what is saved, and the app tells you when one is overriding what you just entered. An empty variable counts as unset.
 - **Forgetting:** `/provider remove <name>` deletes a provider's saved settings; or delete the file.
 
-**Settings** — `.cortex/settings.json` in the project (and `~/.cortex/settings.json` for you) are merged. A malformed file is an error, not silently ignored.
+</details>
+
+<details>
+<summary><b>Settings, permissions, hooks and MCP servers</b> (<code>.cortex/settings.json</code>)</summary>
+
+<br>
+
+`.cortex/settings.json` in the project and `~/.cortex/settings.json` for you are merged. A malformed file is an error, not silently ignored.
 
 ```json
 {
@@ -80,11 +144,19 @@ Deny rules always win, even in `bypassPermissions`.
 
 Rules are `tool_name` or `tool_name(pattern)`, where the pattern is an exact value, `prefix:*`, or `prefix*`. Hooks receive the event as JSON on stdin; exit code 2 blocks the action and its stderr goes back to the model. Events: `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`.
 
-**Memory** — `CORTEX.md` in the project (and `~/.cortex/CORTEX.md`) is added to the system prompt.
+</details>
 
-**Skills** — `.cortex/skills/<name>/SKILL.md` with `name` and `description` frontmatter. Only the name and description sit in the prompt; the model loads the body with the `skill` tool when it needs it.
+<details>
+<summary><b>Memory and skills</b></summary>
 
-## How it fits together
+<br>
+
+- **Memory:** `CORTEX.md` in the project (and `~/.cortex/CORTEX.md`) is added to the system prompt.
+- **Skills:** `.cortex/skills/<name>/SKILL.md` with `name` and `description` frontmatter. Only the name and description sit in the prompt; the model loads the body with the `skill` tool when it needs it.
+
+</details>
+
+## 🧱 Architecture
 
 An npm-workspaces monorepo. Each package is one component with its own tests. The "Depends on" column is the complete list of allowed dependencies, read bottom-up (`core` depends on nothing); `tests/architecture.test.ts` fails the build if a package's source, `package.json` or `tsconfig.json` disagree with it.
 
@@ -100,11 +172,19 @@ An npm-workspaces monorepo. Each package is one component with its own tests. Th
 | [`@cortex/agent`](packages/agent) | the tool-use loop, the policy-gated executor, compaction, subagents | core, providers, tools, context, policy |
 | [`apps/cli`](apps/cli) | the terminal UI and the one place everything is wired together | all of the above |
 
-The agent loop is open and model-driven: there are no fixed analyze/plan/implement stages. What happens on a turn comes from the context the model is given and the tools it chooses to call.
+## 🛠 Development
 
-## Development
-
+```bash
+git clone https://github.com/Pushpraj-10/cortex.git
+cd cortex
+npm install
+cp .env.example .env      # set OLLAMA_MODEL (local), or a cloud key + model
+npm run dev               # full-screen terminal UI
+npm run dev -- -p "explain what src/index.ts does"
+npm run build             # bundle the installable package into apps/cli/dist
 ```
+
+```bash
 npm run typecheck        # tsc --build across every package and tests/
 npm test                 # all unit tests plus the architecture test
 npm run test:packages    # each package's tests in isolation (also: npm test -w @cortex/policy)
@@ -113,8 +193,16 @@ npm run test:e2e         # live-model scripts in tests/ (needs Ollama running)
 
 Conventions: related small things live in one commented file per feature rather than one function per file, and each package's `test/` mirrors its `src/`. Commit messages follow [CLAUDE.md](CLAUDE.md).
 
-Replies stream in as the model writes them (Ollama, Google and Anthropic); `-p` runs print only the final answer. Known limit: `run_command` is gated only by approval, not sandboxed.
+> **Known limit:** `run_command` is gated only by approval, not sandboxed.
 
-## Acknowledgements
+## ⭐ Support
+
+If Cortex is useful to you, a star on [GitHub](https://github.com/Pushpraj-10/cortex) goes a long way. Issues and ideas are welcome at [Pushpraj-10/cortex/issues](https://github.com/Pushpraj-10/cortex/issues).
+
+## 🙏 Acknowledgements
 
 The terminal UI's markdown, code and tool-call presentation was designed after studying [Gemini CLI](https://github.com/google-gemini/gemini-cli) (Apache-2.0), which is also built on Ink. The parsers and components here are written from scratch for Cortex's structure; no code was copied.
+
+## 📄 License
+
+[MIT](LICENSE) © Pushpraj-10
