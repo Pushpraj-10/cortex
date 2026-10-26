@@ -179,6 +179,49 @@ describe("createToolsExecutor with a policy", () => {
     expect(result.ok).toBe(false);
   });
 
+  it("refuses a tool outside the active agent's limit, without asking or running it", async () => {
+    handlers.edit!.mockClear();
+    handlers.execute!.mockClear();
+    const p = policy({ agent: "scan", mode: "bypassPermissions" });
+    const executor = createToolsExecutor("/w", p);
+
+    for (const name of ["policy-test-edit", "policy-test-execute"]) {
+      const result = await executor.execute(name, {});
+      expect(!result.ok && result.error.code).toBe("TOOL_DENIED");
+      expect(!result.ok && result.error.message).toContain("scan agent may not use");
+      expect(!result.ok && result.error.message).toContain("Do not retry");
+    }
+    expect(p.askPermission).not.toHaveBeenCalled();
+    expect(handlers.edit).not.toHaveBeenCalled();
+    expect(handlers.execute).not.toHaveBeenCalled();
+  });
+
+  it("still runs the tools the active agent may use, under the normal permission rules", async () => {
+    const p = policy({ agent: "scan" });
+    const executor = createToolsExecutor("/w", p);
+    expect(await executor.execute("policy-test-read", {})).toEqual({ ok: true, value: "read ran" });
+
+    const fix = policy({ agent: "fix" });
+    expect(await createToolsExecutor("/w", fix).execute("policy-test-edit", {})).toEqual({ ok: true, value: "edit ran" });
+    expect(fix.askPermission).toHaveBeenCalledWith("policy-test-edit", {});
+  });
+
+  it("keeps denying in fix mode when the permission mode is plan", async () => {
+    const p = policy({ agent: "fix", mode: "plan" });
+    const result = await createToolsExecutor("/w", p).execute("policy-test-edit", {});
+    expect(!result.ok && result.error.message).toContain("Permission denied");
+  });
+
+  it("sees an agent switch made after the executor was created", async () => {
+    const p = policy({ agent: "scan" });
+    const executor = createToolsExecutor("/w", p);
+    expect((await executor.execute("policy-test-edit", {})).ok).toBe(false);
+    p.agent = "fix";
+    expect((await executor.execute("policy-test-edit", {})).ok).toBe(true);
+    p.agent = undefined;
+    expect((await executor.execute("policy-test-execute", {})).ok).toBe(true);
+  });
+
   it("honours allow and deny rules", async () => {
     const allowed = policy({ rules: { allow: ["policy-test-execute"], deny: [] } });
     await createToolsExecutor("/w", allowed).execute("policy-test-execute", {});

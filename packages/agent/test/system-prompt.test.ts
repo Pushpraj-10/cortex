@@ -45,6 +45,20 @@ describe("buildSystemPrompt", () => {
     expect(build()).not.toMatch(/Plan mode/);
   });
 
+  it("adds the active agent mode's instructions, and nothing when there is none", () => {
+    expect(build({ agent: "scan" })).toContain("Agent mode: SCAN");
+    expect(build({ agent: "fix" })).toContain("Agent mode: FIX");
+    expect(build({ agent: "scan" })).not.toContain("Agent mode: FIX");
+    expect(build()).not.toContain("Agent mode:");
+  });
+
+  it("keeps the base prompt and puts the agent section before the skills and memory", () => {
+    const rendered = build({ agent: "suggest", skillIndex: "- review: Reviews diffs", memory: "# Project instructions\nuse tabs" });
+    expect(rendered).toMatch(/tool-calling mechanism/i);
+    expect(rendered.indexOf("Agent mode: SUGGEST")).toBeLessThan(rendered.indexOf("- review: Reviews diffs"));
+    expect(rendered.endsWith("# Project instructions\nuse tabs")).toBe(true);
+  });
+
   it("appends the skill index and the memory when given, and omits them otherwise", () => {
     const rendered = build({ skillIndex: "- review: Reviews diffs", memory: "# Project instructions\nuse tabs" });
     expect(rendered).toContain("- review: Reviews diffs");

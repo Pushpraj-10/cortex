@@ -171,6 +171,47 @@ describe("createAgentSession with policy, memory, skills and tool exclusion", ()
     expect(sentMessages[1]![0]!.content).toMatch(/Plan mode/);
   });
 
+  it("offers only the active agent's tools, and sees a switch made between turns", async () => {
+    for (const [name, kind] of [["agent-test-read", "read"], ["agent-test-edit", "edit"], ["agent-test-run", "execute"], ["save_security_report", "edit"]] as const) {
+      registerTool({ name, description: "", kind, parametersSchema: {}, handler: async () => ok(null) });
+    }
+    const { llm } = llmReturning(
+      ok({ role: "assistant", content: "one" }),
+      ok({ role: "assistant", content: "two" }),
+      ok({ role: "assistant", content: "three" }),
+    );
+    const chat = llm.chat as unknown as ReturnType<typeof vi.fn>;
+    const offered = (call: number) => (chat.mock.calls[call]![0].tools as { name: string }[]).map((t) => t.name);
+    const p = policy({ agent: "scan" });
+    const session = createAgentSession({ llm, executor, workspaceRoot: "/repo", policy: p });
+
+    await collect(session.chat("first"));
+    p.agent = "fix";
+    await collect(session.chat("second"));
+    p.agent = undefined;
+    await collect(session.chat("third"));
+
+    expect(offered(0)).toContain("agent-test-read");
+    expect(offered(0)).toContain("save_security_report");
+    expect(offered(0)).not.toContain("agent-test-edit");
+    expect(offered(0)).not.toContain("agent-test-run");
+    expect(offered(1)).toEqual(expect.arrayContaining(["agent-test-read", "agent-test-edit", "agent-test-run", "save_security_report"]));
+    expect(offered(2)).toEqual(expect.arrayContaining(["agent-test-edit", "agent-test-run"]));
+  });
+
+  it("tells the model its agent mode, re-rendered every turn", async () => {
+    const { llm, sentMessages } = llmReturning(ok({ role: "assistant", content: "one" }), ok({ role: "assistant", content: "two" }));
+    const p = policy();
+    const session = createAgentSession({ llm, executor, workspaceRoot: "/repo", policy: p });
+
+    await collect(session.chat("first"));
+    p.agent = "scan";
+    await collect(session.chat("second"));
+
+    expect(sentMessages[0]![0]!.content).not.toContain("Agent mode:");
+    expect(sentMessages[1]![0]!.content).toContain("Agent mode: SCAN");
+  });
+
   it("stops the turn, without calling the model, when a UserPromptSubmit hook blocks", async () => {
     const { llm } = llmReturning();
     const p = policy({ hooks: [{ event: "UserPromptSubmit", command: exit(2, "no secrets in prompts") }] });

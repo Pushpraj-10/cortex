@@ -1,12 +1,13 @@
 /**
  * The executor runs one tool call by name, behind the policy pipeline:
- *   PreToolUse hooks -> permission decision (-> ask the user) -> the tool -> PostToolUse hooks.
+ *   agent-mode limit -> PreToolUse hooks -> permission decision (-> ask the user) -> the tool -> PostToolUse hooks.
  * Every failure comes back as an error Result whose message says what happened and what to do instead,
  * so the model adapts rather than retrying blindly. Nothing here throws.
  */
 import { CortexError, err, ok, type Result } from "@cortex/core";
 import { decidePermission, runHooks } from "@cortex/policy";
 import { getTool, listTools, UnknownToolError, type ToolDefinition } from "@cortex/tools";
+import { agentDeniedMessage, isToolAllowed } from "./agent-modes.js";
 import type { AgentPolicy, Executor, RefusalCode } from "./types.js";
 
 // ---- Recovery hints --------------------------------------------------------------
@@ -51,6 +52,11 @@ export function createToolsExecutor(cwd: string, policy?: AgentPolicy): Executor
       const input = typeof args === "object" && args !== null ? (args as Record<string, unknown>) : {};
 
       if (policy) {
+        // The session only hides tools from the model; this refuses a call to one anyway (a made-up call, or a subagent's).
+        if (policy.agent && !isToolAllowed(policy.agent, tool)) {
+          return refusal(agentDeniedMessage(policy.agent, toolName, tool.kind), "TOOL_DENIED");
+        }
+
         const pre = await runHooks(policy.hooks, "PreToolUse", { tool_name: toolName, tool_input: input }, cwd);
         if (pre.blocked) {
           return refusal(`Blocked by hook: ${pre.message}\nAdjust the call to satisfy the hook, or ask the user.`, "TOOL_BLOCKED");

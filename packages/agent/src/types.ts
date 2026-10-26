@@ -1,6 +1,7 @@
 import type { Result } from "@cortex/core";
 import type { HookDef, PermissionMode, PermissionRules } from "@cortex/policy";
 import type { LLMProvider } from "@cortex/providers";
+import type { AgentModeId } from "./agent-modes.js";
 
 /** Error codes the executor uses when a call is refused by a decision rather than failing. */
 export const REFUSAL_CODES = ["TOOL_DENIED", "TOOL_DECLINED", "TOOL_BLOCKED"] as const;
@@ -32,10 +33,12 @@ export type AgentEvent =
 /**
  * What is allowed to happen during a turn. One object is shared by the executor (which gates each tool
  * call) and the session (which runs prompt hooks and tells the model the mode), so the UI can change
- * `mode` between turns and both see it.
+ * `mode` or `agent` between turns and both see it.
  */
 export interface AgentPolicy {
   mode: PermissionMode;
+  /** The active agent mode (scan, suggest, fix). Undefined is the general agent, which has no tool limit beyond `mode`. */
+  agent?: AgentModeId;
   rules: PermissionRules;
   hooks: HookDef[];
   /** Asked when policy says a call needs approval. Resolve true to run it. */

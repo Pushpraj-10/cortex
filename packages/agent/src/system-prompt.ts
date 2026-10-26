@@ -1,9 +1,12 @@
 import type { PermissionMode } from "@cortex/policy";
+import { getAgentMode, type AgentModeId } from "./agent-modes.js";
 
 export interface SystemPromptOptions {
   workspaceRoot: string;
   /** When "plan", the model is told it may only read. */
   mode?: PermissionMode;
+  /** The active agent mode; its instructions are added after the base prompt. */
+  agent?: AgentModeId;
   /** The user's CORTEX.md contents. */
   memory?: string;
   /** One line per skill; the bodies load on demand through the skill tool. */
@@ -58,6 +61,7 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
   if (options.mode === "plan") {
     sections.push("Plan mode: you may only read. Investigate, then present a plan; do not modify anything.");
   }
+  if (options.agent) sections.push(getAgentMode(options.agent).prompt);
   if (options.skillIndex) {
     sections.push(`Skills available through the skill tool (load one when it fits the task):\n${options.skillIndex}`);
   }

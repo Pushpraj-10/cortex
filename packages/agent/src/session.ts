@@ -3,6 +3,7 @@ import { runHooks } from "@cortex/policy";
 import type { ChatMessage, ToolSpec } from "@cortex/providers";
 import { listTools, type ToolDefinition } from "@cortex/tools";
 import { runToolLoop } from "./loop.js";
+import { isToolAllowed } from "./agent-modes.js";
 import { buildSystemPrompt } from "./system-prompt.js";
 import type { AgentConfig, AgentEvent, AgentSession } from "./types.js";
 
@@ -19,7 +20,7 @@ export function toToolSpec(tool: ToolDefinition): ToolSpec {
  * Creates a chat session for one workspace. Each chat() call appends the user's message and runs
  * the tool loop against the full conversation so far, so context carries across calls on the same
  * session. The system message is re-rendered per call (it is always history[0]) so a permission-mode
- * change takes effect on the next message.
+ * or agent-mode change takes effect on the next message.
  */
 export function createAgentSession(config: AgentConfig): AgentSession {
   const excluded = new Set(config.excludeTools ?? []);
@@ -28,6 +29,7 @@ export function createAgentSession(config: AgentConfig): AgentSession {
     content: buildSystemPrompt({
       workspaceRoot: config.workspaceRoot,
       mode: config.policy?.mode,
+      agent: config.policy?.agent,
       memory: config.memory,
       skillIndex: config.skillIndex,
     }),
@@ -47,7 +49,10 @@ export function createAgentSession(config: AgentConfig): AgentSession {
 
       history[0] = systemMessage();
       history.push({ role: "user", content: userInput });
-      const tools = listTools().filter((tool) => !excluded.has(tool.name)).map(toToolSpec);
+      const agent = policy?.agent;
+      const tools = listTools()
+        .filter((tool) => !excluded.has(tool.name) && isToolAllowed(agent, tool))
+        .map(toToolSpec);
       const contextBlock = await gatherContext({ workspaceRoot: config.workspaceRoot, userMessage: userInput, signal });
 
       yield* runToolLoop(

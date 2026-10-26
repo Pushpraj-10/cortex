@@ -5,6 +5,14 @@
  */
 
 export type { AgentConfig, AgentEvent, AgentPolicy, AgentSession, Executor } from "./types.js";
+export {
+  AGENT_MODE_IDS,
+  getAgentMode,
+  isAgentModeId,
+  listAgentModes,
+  type AgentMode,
+  type AgentModeId,
+} from "./agent-modes.js";
 export { createAgentSession } from "./session.js";
 export { createToolsExecutor } from "./executor.js";
 export { createTaskTool, TASK_TOOL_NAME } from "./subagent.js";
