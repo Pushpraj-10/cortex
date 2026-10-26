@@ -25,7 +25,7 @@ const DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com";
 
 export type GooglePart =
   | { text: string; thought?: boolean }
-  | { functionCall: { name: string; args: unknown } }
+  | { functionCall: { name: string; args: unknown }; thoughtSignature?: string }
   | { functionResponse: { name: string; response: Record<string, unknown> } };
 
 export interface GoogleContent {
@@ -115,7 +115,12 @@ export function toGoogleContents(messages: ChatMessage[]): { systemInstruction?:
       push("user", message.content ? [{ text: message.content }] : []);
     } else if (message.role === "assistant") {
       const parts: GooglePart[] = message.content ? [{ text: message.content }] : [];
-      for (const call of message.toolCalls ?? []) parts.push({ functionCall: { name: call.toolName, args: call.args } });
+      for (const call of message.toolCalls ?? []) {
+        parts.push({
+          functionCall: { name: call.toolName, args: call.args },
+          ...(call.thoughtSignature ? { thoughtSignature: call.thoughtSignature } : {}),
+        });
+      }
       push("model", parts);
     } else {
       push("user", [{ functionResponse: { name: message.name ?? "tool", response: toResponseObject(message.content) } }]);
@@ -141,11 +146,15 @@ export function buildGoogleRequest(request: ChatRequest): GoogleRequestBody {
 /**
  * Joins the reply's visible text (skipping "thought" parts) and returns only the first `functionCall`
  * as a ToolCall: the agent runs one action per turn, and history must match what was actually run.
+ * The call's `thoughtSignature` is kept so it can be echoed back; Gemini 3 rejects a replayed call without it.
  */
 export function fromGoogleParts(parts: GooglePart[]): { content: string; toolCalls?: ToolCall[] } {
   const content = parts.flatMap((part) => ("text" in part && !part.thought ? [part.text] : [])).join("\n");
   const call = parts.find((part): part is Extract<GooglePart, { functionCall: unknown }> => "functionCall" in part);
-  return call ? { content, toolCalls: [{ toolName: call.functionCall.name, args: call.functionCall.args }] } : { content };
+  if (!call) return { content };
+  const toolCall: ToolCall = { toolName: call.functionCall.name, args: call.functionCall.args };
+  if (call.thoughtSignature) toolCall.thoughtSignature = call.thoughtSignature;
+  return { content, toolCalls: [toolCall] };
 }
 
 // ---- client ----------------------------------------------------------------------

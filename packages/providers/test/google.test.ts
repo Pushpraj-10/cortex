@@ -136,6 +136,20 @@ describe("fromGoogleParts", () => {
     ]);
     expect(out).toEqual({ content: "", toolCalls: [{ toolName: "first", args: { x: 1 } }] });
   });
+
+  it("keeps the functionCall's thoughtSignature on the ToolCall", () => {
+    const out = fromGoogleParts([{ functionCall: { name: "first", args: {} }, thoughtSignature: "sig" }]);
+    expect(out.toolCalls).toEqual([{ toolName: "first", args: {}, thoughtSignature: "sig" }]);
+  });
+
+  it("echoes a ToolCall's thoughtSignature back on the replayed functionCall part", () => {
+    const { contents } = toGoogleContents([
+      { role: "assistant", content: "", toolCalls: [{ toolName: "find_files", args: {}, thoughtSignature: "sig" }] },
+    ]);
+    expect(contents).toEqual([
+      { role: "model", parts: [{ functionCall: { name: "find_files", args: {} }, thoughtSignature: "sig" }] },
+    ]);
+  });
 });
 
 describe("createGoogleClient", () => {

@@ -19,6 +19,8 @@ export interface ToolSpec {
 export interface ToolCall {
   toolName: string;
   args: unknown;
+  /** Opaque token some providers (Gemini 3) attach to a call and require echoed back when it is replayed. */
+  thoughtSignature?: string;
 }
 
 export interface ChatMessage {
