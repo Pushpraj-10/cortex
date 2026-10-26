@@ -11,6 +11,7 @@ function colours(theme: Theme): (string | undefined)[] {
     theme.muted,
     theme.border,
     theme.inputBackground,
+    theme.panelBackground,
     ...Object.values(theme.status),
     ...Object.values(theme.diff),
     ...Object.values(theme.syntax),
@@ -77,6 +78,19 @@ describe("themes", () => {
     const text = (theme: Theme) => [theme.primary, theme.secondary, theme.muted, ...Object.values(theme.status), ...Object.values(theme.syntax)] as string[];
     for (const colour of text(getTheme("dark"))) expect(contrast(colour, "#0D1117")).toBeGreaterThanOrEqual(4.5);
     for (const colour of text(getTheme("light"))) expect(contrast(colour, "#FFFFFF")).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("keeps all text colours readable (WCAG AA, 4.5:1) on the panel behind the menus and prompts, in its own theme", () => {
+    for (const name of ["dark", "light"] as const) {
+      const theme = getTheme(name);
+      const text = [theme.primary, theme.secondary, theme.muted, theme.status.success, theme.status.warning, theme.status.error] as string[];
+      for (const colour of text) expect(contrast(colour, theme.panelBackground as string), `${name} ${colour}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("draws the panel dark in the dark theme and light in the light theme", () => {
+    expect(luminance(getTheme("dark").panelBackground as string)).toBeLessThan(0.05);
+    expect(luminance(getTheme("light").panelBackground as string)).toBeGreaterThan(0.6);
   });
 
   it("gives added and removed diff lines different backgrounds", () => {

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { AgentModeId, AgentPolicy, AgentSession } from "@cortex/agent";
+import { ok } from "@cortex/core";
+import { registerTool } from "@cortex/tools";
 import { createPermissionBridge } from "../../src/runtime/permission-bridge.js";
 import { slashCommands } from "../../src/ui/commands.js";
 import { KEY, driveApp, type DrivenApp } from "./support/drive-app.js";
@@ -107,7 +109,7 @@ describe("App: menus and prompts are drawn over the transcript", () => {
     await a.press("/");
     const after = a.screen().split("\n");
 
-    const menuRows = slashCommands.length + 2;
+    const menuRows = slashCommands.length; // one row each; the menu has no border
     expect(after).toHaveLength(24);
     expect(after.slice(0, TRANSCRIPT_ROWS - menuRows)).toEqual(before.slice(0, TRANSCRIPT_ROWS - menuRows));
     expect(after.slice(TRANSCRIPT_ROWS - menuRows, TRANSCRIPT_ROWS).join("\n")).toContain("/help");
@@ -150,14 +152,151 @@ describe("App: menus and prompts are drawn over the transcript", () => {
     const waiting = await run(() => new Promise(() => undefined));
     const asking = await run((permissions) => permissions.ask("edit_file", { path: "a.ts" }));
 
-    // While the agent works there is one thinking row; the prompt (4 rows) is drawn over that row and the 3 above it.
-    const promptRows = 4;
-    const unmoved = TRANSCRIPT_ROWS - 1 - (promptRows - 1);
+    // The approval window takes the input box's place and is drawn up from the status line: Yes and No (no tool is registered
+    // here, so there is no "don't ask again"), plus a blank row, the title, the question and the hint.
+    const promptRows = 4 + 2;
+    const unmoved = 24 - 1 - promptRows;
     expect(asking).toHaveLength(24);
-    expect(asking.join("\n")).toContain("Allow Run edit_file?"); // no tools are registered here, so the summary falls back to the tool's name
-    expect(asking.join("\n")).toContain("y / enter allow");
+    expect(asking.join("\n")).toContain("Run edit_file"); // no tools are registered here, so the summary falls back to the tool's name
+    expect(asking.join("\n")).toContain("Do you want to proceed?");
     expect(asking.slice(0, unmoved)).toEqual(waiting.slice(0, unmoved));
     expect(asking[23]).toBe(waiting[23]);
+    // The input box is hidden while the window is up.
+    expect(waiting.some((row) => /^ > /.test(row))).toBe(true);
+    expect(asking.some((row) => /^ > /.test(row))).toBe(false);
+  });
+});
+
+describe("App: the approval window", () => {
+  const size = { rows: 30, columns: 100 };
+  const SHIFT_TAB = "\u001b[Z";
+
+  registerTool({ name: "approval-test-edit", description: "", kind: "edit", parametersSchema: {}, summarize: (args) => `Edit ${(args as { path: string }).path}`, handler: async () => ok(null) });
+  registerTool({ name: "approval-test-run", description: "", kind: "execute", parametersSchema: {}, summarize: (args) => `Run ${(args as { command: string }).command}`, handler: async () => ok(null) });
+
+  /** The app, its policy, and the one call the agent is waiting for approval of; `outcome.answer` is what the agent was told. */
+  async function askAbout(toolName: string, args: unknown) {
+    const permissions = createPermissionBridge();
+    const outcome: { answer?: boolean } = {};
+    const policy: AgentPolicy = { mode: "default", rules: { allow: [], deny: [] }, hooks: [], askPermission: async () => false };
+    const session: AgentSession = {
+      // eslint-disable-next-line require-yield
+      async *chat() {
+        outcome.answer = await permissions.ask(toolName, args);
+      },
+    };
+    const a = await start({ ...size, permissions, policy, initialSession: session });
+    await a.press("go");
+    await a.press(KEY.enter);
+    return { a, policy, outcome };
+  }
+
+  it("takes the input box's place with numbered choices, the first one marked", async () => {
+    const { a } = await askAbout("approval-test-edit", { path: "a.ts" });
+    const screen = a.screen();
+    expect(screen).toContain("Edit a.ts");
+    expect(screen).toContain("❯ 1. Yes");
+    expect(screen).toContain("  2. Yes, and don't ask again for edits this session (shift+tab)");
+    expect(screen).toContain("  3. No (esc)");
+    expect(screen.split("\n").some((row) => /^ > /.test(row))).toBe(false); // no input box
+    expect(screen).not.toMatch(/[╭╮╰╯]/); // and no border
+  });
+
+  it("moves the mark with the arrow keys, stopping at the ends, and answers with enter", async () => {
+    const { a, outcome } = await askAbout("approval-test-edit", { path: "a.ts" });
+
+    await a.press(KEY.down);
+    expect(a.screen()).toContain("❯ 2. Yes, and don't ask again");
+    await a.press(KEY.down);
+    await a.press(KEY.down);
+    expect(a.screen()).toContain("❯ 3. No");
+    await a.press(KEY.up);
+    expect(a.screen()).toContain("❯ 2. Yes, and don't ask again");
+    await a.press(KEY.up);
+    await a.press(KEY.up);
+    expect(a.screen()).toContain("❯ 1. Yes");
+
+    await a.press(KEY.enter);
+    expect(outcome.answer).toBe(true);
+  });
+
+  it("brings the input box back once it is answered, with what was typed before still in it", async () => {
+    const { a } = await askAbout("approval-test-edit", { path: "a.ts" });
+    await a.press(KEY.enter);
+    expect(a.screen()).not.toContain("Do you want to proceed?");
+    expect(a.screen().split("\n").some((row) => /^ > /.test(row))).toBe(true);
+  });
+
+  it("answers no with enter on the last choice, with esc, or with n, and does not remember anything", async () => {
+    for (const answer of [() => [KEY.down, KEY.down, KEY.enter], () => [KEY.escape], () => ["n"]]) {
+      const { a, policy, outcome } = await askAbout("approval-test-edit", { path: "a.ts" });
+      for (const key of answer()) await a.press(key);
+      expect(outcome.answer).toBe(false);
+      expect(policy.mode).toBe("default");
+      await a.unmount();
+      app = undefined;
+    }
+  });
+
+  it("answers by number, and 'y' means yes", async () => {
+    const first = await askAbout("approval-test-edit", { path: "a.ts" });
+    await first.a.press("3");
+    expect(first.outcome.answer).toBe(false);
+    await first.a.unmount();
+    app = undefined;
+
+    const second = await askAbout("approval-test-edit", { path: "a.ts" });
+    await second.a.press("y");
+    expect(second.outcome.answer).toBe(true);
+    expect(second.policy.mode).toBe("default");
+  });
+
+  it("ignores a number with no choice behind it", async () => {
+    const { a, outcome } = await askAbout("approval-test-edit", { path: "a.ts" });
+    await a.press("9");
+    expect(outcome.answer).toBeUndefined();
+    expect(a.screen()).toContain("Do you want to proceed?");
+  });
+
+  it("'yes, don't ask again' for an edit switches to accept-edits mode, as does shift+tab", async () => {
+    const byNumber = await askAbout("approval-test-edit", { path: "a.ts" });
+    await byNumber.a.press("2");
+    expect(byNumber.outcome.answer).toBe(true);
+    expect(byNumber.policy.mode).toBe("acceptEdits");
+    expect(byNumber.a.screen()).toContain("accept edits on");
+    await byNumber.a.unmount();
+    app = undefined;
+
+    const byKey = await askAbout("approval-test-edit", { path: "a.ts" });
+    await byKey.a.press(SHIFT_TAB);
+    expect(byKey.outcome.answer).toBe(true);
+    expect(byKey.policy.mode).toBe("acceptEdits");
+  });
+
+  it("'yes, don't ask again' for a command remembers only that exact command", async () => {
+    const { a, policy, outcome } = await askAbout("approval-test-run", { command: "npm test" });
+    expect(a.screen()).toContain("2. Yes, and don't ask again for this exact command this session");
+    await a.press("2");
+    expect(outcome.answer).toBe(true);
+    expect(policy.rules.allow).toEqual(["approval-test-run(npm test)"]);
+    expect(policy.mode).toBe("default");
+  });
+
+  it("offers only yes and no for a call it cannot safely remember, and shift+tab then does nothing", async () => {
+    const { a, outcome } = await askAbout("approval-test-run", { command: "echo a\necho b" });
+    expect(a.screen()).toContain("2. No (esc)");
+    expect(a.screen()).not.toContain("don't ask again");
+    await a.press(SHIFT_TAB);
+    expect(outcome.answer).toBeUndefined();
+  });
+
+  it("ignores typing while it is up, so it cannot reach the input box", async () => {
+    const { a, outcome } = await askAbout("approval-test-edit", { path: "a.ts" });
+    await a.press("x");
+    expect(outcome.answer).toBeUndefined();
+    await a.press(KEY.enter);
+    await a.press(KEY.enter);
+    expect(a.screen()).not.toContain("> x");
   });
 });
 
@@ -441,7 +580,7 @@ describe("App: the @ file menu", () => {
   it("lists matching files as you type, and tab fills in the plain path (no @) and closes the menu", async () => {
     const a = await start();
     await a.type("@in");
-    expect(a.screen()).toContain("› src/index.ts");
+    expect(a.screen()).toContain("❯ src/index.ts");
     expect(a.screen()).toContain("src/ui/components/InputBox.tsx");
 
     await a.press(KEY.tab);
@@ -474,9 +613,9 @@ describe("App: the @ file menu", () => {
     await a.type("@in");
     await a.press(KEY.escape);
     expect(a.screen()).toContain("> @in");
-    expect(a.screen()).not.toContain("› src/index.ts");
+    expect(a.screen()).not.toContain("❯ src/index.ts");
     await a.type("d");
-    expect(a.screen()).toContain("› src/index.ts");
+    expect(a.screen()).toContain("❯ src/index.ts");
   });
 
   it("sends a message that has only a lone @ in it, rather than filling in a file", async () => {

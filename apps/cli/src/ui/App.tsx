@@ -13,7 +13,8 @@ import { PermissionPrompt, SETUP_PROMPT_ROWS, SetupPrompt, permissionPromptRows 
 import { SlashCommandMenu } from "./components/SlashCommandMenu.js";
 import { StatusLine } from "./components/StatusLine.js";
 import { ThinkingIndicator } from "./components/ThinkingIndicator.js";
-import { summarizeToolCall } from "../format/tool-calls.js";
+import { permissionChoices, type PermissionChoice } from "../format/permission-choices.js";
+import { summarizeToolCall, toolKindOf } from "../format/tool-calls.js";
 import { useChat } from "./hooks/useChat.js";
 import { historyMatches, stepHistorySearch, useInputHistory, type HistorySearch } from "./hooks/useInputHistory.js";
 import { useProviderSetup } from "./hooks/useProviderSetup.js";
@@ -23,7 +24,7 @@ import { useWorkspaceFiles } from "./hooks/useWorkspaceFiles.js";
 import { useTranscriptScroll } from "./hooks/useTranscriptScroll.js";
 import { continueLine, moveToLineEnd, moveToLineStart, moveVertical, normalizePaste, useTextInput } from "./hooks/useTextInput.js";
 import { TerminalSizeContext, useTerminalSize } from "./hooks/terminal.js";
-import { slashMenuRows, transcriptRows } from "./layout.js";
+import { inputTextRows, slashMenuRows, transcriptRows } from "./layout.js";
 import type { PermissionBridge } from "../runtime/permission-bridge.js";
 import type { ProviderManager } from "../provider/manager.js";
 import { tildify } from "../format/path.js";
@@ -96,6 +97,8 @@ export function App({
   const input = useTextInput();
   const [mode, setModeState] = useState<PermissionMode>(policy.mode);
   const [agent, setAgentState] = useState<AgentModeId | undefined>(policy.agent);
+  // Which answer the arrow keys are on in the approval window. Tied to the request it was for, so the next request starts on the first.
+  const [permissionSelection, setPermissionSelection] = useState<{ request: unknown; index: number } | null>(null);
   const [submitted, setSubmitted] = useState<string[]>(initialHistory ?? []);
   const history = useInputHistory(submitted);
   const [slashIndex, setSlashIndex] = useState(0);
@@ -165,6 +168,16 @@ export function App({
   function setAgent(next: AgentModeId | undefined) {
     policy.agent = next;
     setAgentState(next);
+  }
+
+  /** Answers the pending approval with `choice`, first remembering what that choice asks to be remembered for the session. */
+  function choosePermission(choice: PermissionChoice | undefined) {
+    if (!choice) return;
+    if (choice.allow && choice.remember) {
+      if ("mode" in choice.remember) setMode(choice.remember.mode);
+      else if (!policy.rules.allow.includes(choice.remember.rule)) policy.rules.allow.push(choice.remember.rule);
+    }
+    chat.answerPermission(choice.allow);
   }
 
   function cycleMode() {
@@ -243,11 +256,19 @@ export function App({
         return;
       }
 
-      // While the agent waits for approval, only the answer keys do anything.
+      // While the agent waits for approval, only the answer keys do anything: arrows move, enter takes the one marked,
+      // a number takes that one, esc (or n) says no, y says yes, and shift+tab takes "don't ask again" where it is offered.
       if (chat.pendingPermission) {
+        const last = permissionOptions.length - 1;
         const answer = typed.toLowerCase();
-        if (key.return || answer === "y") chat.answerPermission(true);
-        else if (key.escape || answer === "n") chat.answerPermission(false);
+        const remembered = permissionOptions.find((option) => option.remember);
+        if (key.upArrow) setPermissionSelection({ request: chat.pendingPermission, index: Math.max(0, selectedPermission - 1) });
+        else if (key.downArrow) setPermissionSelection({ request: chat.pendingPermission, index: Math.min(last, selectedPermission + 1) });
+        else if (key.tab && key.shift) choosePermission(remembered);
+        else if (key.return) choosePermission(permissionOptions[selectedPermission]);
+        else if (key.escape || answer === "n") choosePermission(permissionOptions[last]);
+        else if (answer === "y") choosePermission(permissionOptions[0]);
+        else if (/^[1-9]$/.test(typed)) choosePermission(permissionOptions[Number(typed) - 1]);
         return;
       }
 
@@ -383,6 +404,11 @@ export function App({
   useHomeEnd((edge: EdgeKey) => input.apply(edge === "home" ? moveToLineStart : moveToLineEnd), typingAllowed);
 
   const request = chat.pendingPermission;
+  const permissionOptions = useMemo(
+    () => (request ? permissionChoices(request.toolName, toolKindOf(request.toolName), request.args) : []),
+    [request],
+  );
+  const selectedPermission = permissionSelection?.request === request ? Math.min(permissionSelection.index, Math.max(0, permissionOptions.length - 1)) : 0;
   // How much of a diff the approval prompt may show: up to 12 lines, fewer on a short terminal so it does not cover all of the transcript.
   const maxPreviewLines = Math.max(3, Math.min(12, rows - 18));
   const pickerOpen = setup.stage === "select";
@@ -394,13 +420,15 @@ export function App({
   let overlay: { rows: number; content: React.ReactNode } | undefined;
   if (request) {
     overlay = {
-      rows: permissionPromptRows(chat.pendingPreview, maxPreviewLines),
+      rows: permissionPromptRows(chat.pendingPreview, maxPreviewLines, permissionOptions.length),
       content: (
         <PermissionPrompt
           summary={summarizeToolCall(request.toolName, request.args)}
           preview={chat.pendingPreview}
           width={columns}
           maxPreviewLines={maxPreviewLines}
+          choices={permissionOptions}
+          selectedIndex={selectedPermission}
         />
       ),
     };
@@ -440,14 +468,20 @@ export function App({
             onMeasure={scroll.onMeasure}
           />
           {chat.isThinking && (request ? <Box height={1} /> : <ThinkingIndicator active outputChars={chat.outputChars} />)}
-          {overlay && <Overlay rows={overlay.rows}>{overlay.content}</Overlay>}
+          {overlay && !request && <Overlay rows={overlay.rows}>{overlay.content}</Overlay>}
           {search && (
             <HistorySearchLine
               query={search.query}
               position={searchMatches.length > 0 ? { current: searchPosition + 1, total: searchMatches.length } : undefined}
             />
           )}
-          <InputBox value={shownValue} cursorOffset={shownCursor} mask={setup.prompt?.secret === true} placeholder={placeholder} />
+          {/* The approval window takes the input box's place, drawn up from the status line over the rows it reserved, so the layout holds still. */}
+          {request ? (
+            <Box height={inputTextRows(shownValue) + 2} />
+          ) : (
+            <InputBox value={shownValue} cursorOffset={shownCursor} mask={setup.prompt?.secret === true} placeholder={placeholder} />
+          )}
+          {overlay && request && <Overlay rows={overlay.rows}>{overlay.content}</Overlay>}
           <StatusLine model={active ? `${active.model} (${active.provider})` : "no provider"} mode={mode} agent={agent} cwd={shownCwd} branch={branch} context={chat.context} />
         </Box>
       </TerminalSizeContext.Provider>

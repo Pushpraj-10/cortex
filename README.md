@@ -107,6 +107,18 @@ Messages are remembered between sessions, per project, in `~/.cortex/history/` (
 
 The agent is separate from the permission mode, which still applies: `fix` in `plan` mode cannot edit, and `fix` asks before each edit unless the mode allows it. Saving a report is an edit, so `scan` and `suggest` ask once to save theirs (or use `acceptEdits`, which is safe for them because they can edit nothing else). In a one-shot run, use `cortex --agent scan --mode acceptEdits -p "audit src/"`.
 
+### Approving a change
+
+When Cortex wants to edit a file or run a command, a window takes the place of the input box showing what it will do (a diff, or the command) and the choices. It is drawn over the bottom of the conversation, so nothing on screen moves.
+
+| Choice | Does |
+| --- | --- |
+| `1. Yes` | run this call |
+| `2. Yes, and don't ask again ...` | run it, and stop asking for the rest of the session: for an edit, switch to `acceptEdits`; for a command, allow that exact command (only offered when a rule can say it precisely) |
+| `3. No` | refuse it; the agent is told and adapts |
+
+Move with `↑` / `↓` and press `enter`, or press the number. `esc` (or `n`) says no, `y` says yes, and `shift+tab` takes "don't ask again" where it is offered.
+
 ### Permission modes
 
 | Mode | Reads | Edits | Commands |

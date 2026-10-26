@@ -24,6 +24,8 @@ export interface Theme {
   border: string | undefined;
   /** A slightly lifted background behind the input box, so it reads as a field. */
   inputBackground: string | undefined;
+  /** The full-width background of the menus and prompts drawn over the transcript, which have no border. */
+  panelBackground: string | undefined;
   status: {
     success: string | undefined;
     warning: string | undefined;
@@ -45,6 +47,7 @@ const dark: Theme = {
   muted: "#8C8C8C",
   border: "#3D3D3D",
   inputBackground: "#161616",
+  panelBackground: "#000000",
   status: { success: "#8FC79A", warning: "#D9B77E", error: "#FF7A85" },
   diff: { added: "#16281C", removed: "#3A1A1E" },
   syntax: { keyword: "#FF5A63", string: "#8FC79A", number: "#D9B77E", comment: "#858585", title: "#F5F5F5", type: "#8FC79A", builtin: "#D9B77E" },
@@ -57,6 +60,7 @@ const light: Theme = {
   muted: "#5F5F5F",
   border: "#D6D6D6",
   inputBackground: "#F3F3F3",
+  panelBackground: "#F2F2F2",
   status: { success: "#3F7A4A", warning: "#7B6637", error: "#A3182A" },
   diff: { added: "#DDEBDD", removed: "#F5DCDE" },
   syntax: { keyword: "#C4101A", string: "#3F7A4A", number: "#7B6637", comment: "#6B6B6B", title: "#1F1F1F", type: "#3F7A4A", builtin: "#7B6637" },
@@ -69,6 +73,7 @@ const mono: Theme = {
   muted: undefined,
   border: undefined,
   inputBackground: undefined,
+  panelBackground: undefined,
   status: { success: undefined, warning: undefined, error: undefined },
   diff: { added: undefined, removed: undefined },
   syntax: { keyword: undefined, string: undefined, number: undefined, comment: undefined, title: undefined, type: undefined, builtin: undefined },

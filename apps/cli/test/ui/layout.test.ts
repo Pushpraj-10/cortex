@@ -19,9 +19,9 @@ describe("slashMenuRows", () => {
     expect(slashMenuRows(false, 5)).toBe(0);
   });
 
-  it("is one row per match plus the border, or one 'no matches' row", () => {
-    expect(slashMenuRows(true, 3)).toBe(5);
-    expect(slashMenuRows(true, 0)).toBe(3);
+  it("is one row per match, or one 'no matches' row; the menu has no border", () => {
+    expect(slashMenuRows(true, 3)).toBe(3);
+    expect(slashMenuRows(true, 0)).toBe(1);
   });
 });
 

@@ -2,6 +2,7 @@ import React from "react";
 import { describe, expect, it } from "vitest";
 import { displayWidth } from "../../../src/format/table.js";
 import { SlashCommandMenu } from "../../../src/ui/components/SlashCommandMenu.js";
+import { slashMenuRows } from "../../../src/ui/layout.js";
 import { renderFrame } from "../support/render-frame.js";
 
 const commands = [
@@ -10,10 +11,18 @@ const commands = [
 ];
 
 describe("SlashCommandMenu", () => {
-  it("lists each command with its slash and description, and marks the selected one", async () => {
+  it("lists each command with its slash and description in one aligned column, and marks the selected one", async () => {
     const frame = await renderFrame(<SlashCommandMenu commands={commands} selectedIndex={1} />, 60);
-    expect(frame).toContain("  /help — Show the commands and keys");
-    expect(frame).toContain("› /clear — Start a new conversation");
+    expect(frame).toContain("  /help   Show the commands and keys");
+    expect(frame).toContain("❯ /clear  Start a new conversation");
+    const rows = frame.split("\n");
+    expect(rows[0]!.indexOf("Show")).toBe(rows[1]!.indexOf("Start"));
+  });
+
+  it("has no border: just the rows", async () => {
+    const frame = await renderFrame(<SlashCommandMenu commands={commands} selectedIndex={0} />, 60);
+    expect(frame).not.toMatch(/[╭╮╰╯│─]/);
+    expect(frame.split("\n")).toHaveLength(2);
   });
 
   it("says so when nothing matches", async () => {
@@ -23,15 +32,15 @@ describe("SlashCommandMenu", () => {
   it("shows just the name for an item with no description, with no dangling dash", async () => {
     const files = [{ name: "src/index.ts", description: "" }];
     const frame = await renderFrame(<SlashCommandMenu commands={files} selectedIndex={0} prefix="" />, 60);
-    expect(frame).toContain("› src/index.ts");
+    expect(frame).toContain("❯ src/index.ts");
     expect(frame).not.toContain("—");
   });
 
-  it("keeps every item to one row, so the box is as tall as the layout reserved", async () => {
+  it("keeps every item to one row, so the menu is as tall as the layout reserved", async () => {
     const long = { name: `packages/${"deeply/".repeat(12)}nested/file.ts`, description: "" };
     const frame = await renderFrame(<SlashCommandMenu commands={[long, ...commands]} selectedIndex={0} prefix="" />, 40);
     const rows = frame.split("\n");
-    expect(rows).toHaveLength(3 + 2); // three items and the two borders
+    expect(rows).toHaveLength(slashMenuRows(true, 3));
     for (const row of rows) expect(displayWidth(row)).toBeLessThanOrEqual(40);
   });
 
