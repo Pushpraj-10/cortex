@@ -43,9 +43,10 @@ describe("themes", () => {
     for (const name of THEME_NAMES) expect(getTheme(name).name).toBe(name);
   });
 
-  it("uses real #rrggbb colours wherever dark and light set one, and sets all of them", () => {
+  it("uses real #rrggbb colours wherever dark and light set one, and sets all of them but the panel's", () => {
     for (const name of ["dark", "light"] as const) {
-      for (const value of colours(getTheme(name))) expect(value).toMatch(HEX);
+      const theme = getTheme(name);
+      for (const value of colours({ ...theme, panelBackground: theme.border })) expect(value).toMatch(HEX);
     }
   });
 
@@ -80,17 +81,8 @@ describe("themes", () => {
     for (const colour of text(getTheme("light"))) expect(contrast(colour, "#FFFFFF")).toBeGreaterThanOrEqual(4.5);
   });
 
-  it("keeps all text colours readable (WCAG AA, 4.5:1) on the panel behind the menus and prompts, in its own theme", () => {
-    for (const name of ["dark", "light"] as const) {
-      const theme = getTheme(name);
-      const text = [theme.primary, theme.secondary, theme.muted, theme.status.success, theme.status.warning, theme.status.error] as string[];
-      for (const colour of text) expect(contrast(colour, theme.panelBackground as string), `${name} ${colour}`).toBeGreaterThanOrEqual(4.5);
-    }
-  });
-
-  it("draws the panel dark in the dark theme and light in the light theme", () => {
-    expect(luminance(getTheme("dark").panelBackground as string)).toBeLessThan(0.05);
-    expect(luminance(getTheme("light").panelBackground as string)).toBeGreaterThan(0.6);
+  it("leaves the panel behind the menus and prompts unfilled, so it is the terminal's own background", () => {
+    for (const name of THEME_NAMES) expect(getTheme(name).panelBackground).toBeUndefined();
   });
 
   it("gives added and removed diff lines different backgrounds", () => {
