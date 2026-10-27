@@ -15,14 +15,16 @@ describe("SlashCommandMenu", () => {
     const frame = await renderFrame(<SlashCommandMenu commands={commands} selectedIndex={1} />, 60);
     expect(frame).toContain("  /help   Show the commands and keys");
     expect(frame).toContain("❯ /clear  Start a new conversation");
-    const rows = frame.split("\n");
+    const rows = frame.split("\n").slice(1);
     expect(rows[0]!.indexOf("Show")).toBe(rows[1]!.indexOf("Start"));
   });
 
-  it("has no border: just the rows", async () => {
+  it("has no border: a blank row, then the items", async () => {
     const frame = await renderFrame(<SlashCommandMenu commands={commands} selectedIndex={0} />, 60);
     expect(frame).not.toMatch(/[╭╮╰╯│─]/);
-    expect(frame.split("\n")).toHaveLength(2);
+    const rows = frame.split("\n");
+    expect(rows).toHaveLength(3);
+    expect(rows[0]!.trim()).toBe("");
   });
 
   it("says so when nothing matches", async () => {

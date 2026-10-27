@@ -21,16 +21,25 @@ const NAME_GAP = 2;
 /**
  * A list of things to pick from, drawn as the rows of a panel (see Overlay): no border, a background across the full width,
  * the selected row in the accent colour with a `❯`. Every item is one row, which the layout counts on. An item with no
- * description shows just its name.
+ * description shows just its name. A blank row sits above the items, which the layout counts too (`slashMenuRows`).
  */
 export function SlashCommandMenu({ commands, selectedIndex, prefix = "/", truncate = "end" }: SlashCommandMenuProps) {
   const theme = useTheme();
-  if (commands.length === 0) return <PanelRow pieces={[{ text: "No matching commands", color: theme.muted }]} />;
+  if (commands.length === 0) {
+    return (
+      <Box flexDirection="column">
+        <PanelRow pieces={[]} />
+        <PanelRow pieces={[{ text: "No matching commands", color: theme.muted }]} />
+      </Box>
+    );
+  }
 
   const nameWidth = Math.max(...commands.map((command) => displayWidth(prefix + command.name)));
 
   return (
     <Box flexDirection="column">
+      {/* A blank first row, so the transcript's last line does not run into the first item. */}
+      <PanelRow pieces={[]} />
       {commands.map((command, index) => {
         const selected = index === selectedIndex;
         const name = prefix + command.name;

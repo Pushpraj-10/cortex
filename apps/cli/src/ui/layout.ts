@@ -19,9 +19,9 @@ export function inputTextRows(value: string): number {
   return Math.min(Math.max(1, value.split("\n").length), maxInputBoxLines);
 }
 
-/** Rows the slash-command menu draws: one per match (or one "no matches" row); 0 when closed. It has no border. */
+/** Rows the slash-command menu draws: a blank row, then one per match (or one "no matches" row); 0 when closed. It has no border. */
 export function slashMenuRows(open: boolean, matchCount: number): number {
-  return open ? Math.max(1, matchCount) : 0;
+  return open ? 1 + Math.max(1, matchCount) : 0;
 }
 
 export interface LayoutInput {
