@@ -203,7 +203,7 @@ export function App({
       scroll.toBottom();
       setSession(newSession());
     },
-    quit: exit,
+    exit,
     notify: chat.notify,
   };
 

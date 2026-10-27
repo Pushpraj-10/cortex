@@ -14,7 +14,7 @@ function host(overrides: Partial<CommandHost> = {}): CommandHost {
     openProviderSetup: vi.fn(),
     removeProvider: vi.fn(),
     clear: vi.fn(),
-    quit: vi.fn(),
+    exit: vi.fn(),
     notify: vi.fn(),
     ...overrides,
   };
@@ -36,12 +36,12 @@ describe("runSlashCommand", () => {
     for (const command of slashCommands) expect(HELP_TEXT).toContain(`/${command.name}`);
   });
 
-  it("/clear and /quit call the host", () => {
+  it("/clear and /exit call the host", () => {
     const h = host();
     runSlashCommand("/clear", h);
-    runSlashCommand("/quit", h);
+    runSlashCommand("/exit", h);
     expect(h.clear).toHaveBeenCalledTimes(1);
-    expect(h.quit).toHaveBeenCalledTimes(1);
+    expect(h.exit).toHaveBeenCalledTimes(1);
   });
 
   it("/model shows the model and provider", () => {

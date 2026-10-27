@@ -63,7 +63,7 @@ cortex -p "explain what src/index.ts does"     # the answer goes to stdout
 | `/provider [name]` | set up a provider's API key and model, and switch to it (`/provider remove <name>` forgets it) |
 | `/model` | show the active model and provider |
 | `/theme [name]` | show or switch the color theme (`dark`, `light`, `mono`); remembered in `~/.cortex/preferences.json`, and `NO_COLOR` always forces `mono` |
-| `/quit` | exit |
+| `/exit` | exit |
 
 ### Keys
 

@@ -173,7 +173,7 @@ describe("NoticeLine", () => {
   });
 
   it("keeps a multi-line notice, such as the help text, aligned under its first line", async () => {
-    expect(await lines(<NoticeLine notice={notice("Commands:\n  /help  show help\n  /quit  exit")} />)).toEqual(["· Commands:", "    /help  show help", "    /quit  exit"]);
+    expect(await lines(<NoticeLine notice={notice("Commands:\n  /help  show help\n  /exit  exit")} />)).toEqual(["· Commands:", "    /help  show help", "    /exit  exit"]);
   });
 
   it("wraps long text inside the column that starts after the dot", async () => {

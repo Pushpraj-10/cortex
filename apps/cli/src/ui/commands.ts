@@ -16,7 +16,7 @@ export const slashCommands: SlashCommand[] = [
   { name: "provider", description: "Set up a provider's API key and model" },
   { name: "model", description: "Show the active model and provider" },
   { name: "theme", description: "Show or switch the color theme" },
-  { name: "quit", description: "Exit Cortex" },
+  { name: "exit", description: "Exit Cortex" },
 ];
 
 export const HELP_TEXT = [
@@ -46,7 +46,7 @@ export interface CommandHost {
   openProviderSetup(provider?: ProviderId): void;
   removeProvider(provider: ProviderId): void;
   clear(): void;
-  quit(): void;
+  exit(): void;
   /** Shows a one-off line in the transcript. */
   notify(text: string): void;
 }
@@ -70,8 +70,8 @@ export function runSlashCommand(line: string, host: CommandHost): boolean {
     case "model":
       host.notify(`Model: ${host.model} (${host.provider})`);
       break;
-    case "quit":
-      host.quit();
+    case "exit":
+      host.exit();
       break;
     case "theme": {
       const requested = rest[0];
