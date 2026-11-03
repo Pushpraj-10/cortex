@@ -34,7 +34,9 @@ A wildcard is a promise about a *kind* of call, so allow and deny rules hold it 
 
 ## Hooks
 
-Shell commands registered per event: `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`. A hook receives the event as JSON on stdin (`hook_event_name`, plus `tool_name`, `tool_input`, `tool_response` or `prompt`). **Exit code 2 blocks**, and its stderr is fed back to the model; any other exit code is ignored. `matcher` is a tool-name regex matched against the whole name. A hook that times out (60 s) or fails to start counts as not blocking.
+Shell commands registered per event: `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`. A hook receives the event as JSON on stdin (`hook_event_name`, plus `tool_name`, `tool_input`, `tool_response` or `prompt`). **Exit code 2 blocks**, and its stderr (at most 64 KiB of it) is fed back to the model; any other exit code is ignored. `matcher` is a tool-name regex matched against the whole name, and one that is not a valid regular expression is an error when the settings load.
+
+**A hook that cannot do its job fails closed.** For the two hooks that gate something, `PreToolUse` and `UserPromptSubmit`, a hook that **cannot be started, is not found (the shell's exit code 126 or 127), does not finish in 60 s, or is killed by a signal** blocks, and the message says why: a check that never ran has not approved anything, and a hook that crashes quietly must not turn a safety check into a no-op. `PostToolUse` and `Stop` run after the fact, so a failure there blocks nothing. A hook that ran and exited with any other non-zero code is still ignored, so a linter-style hook that exits 1 keeps working. (On Windows `cmd.exe` reports a missing command as exit code 1, which cannot be told from a hook that chose to exit 1; a hook whose command is missing is not detected there.) A hook that outlives its timeout is not waited for, and its output is drained as it runs, so a chatty hook cannot hang it.
 
 ## API
 

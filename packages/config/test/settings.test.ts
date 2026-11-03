@@ -101,6 +101,7 @@ describe("settings: shape checks", () => {
     ["a hook with no command", { hooks: [{ event: "Stop" }] }, /hooks\[0\]\.command must be a non-empty string/],
     ["a hook with a blank command", { hooks: [{ event: "Stop", command: "  " }] }, /hooks\[0\]\.command must be a non-empty string/],
     ["a hook whose matcher is not a string", { hooks: [{ event: "Stop", command: "x", matcher: 5 }] }, /hooks\[0\]\.matcher must be a string/],
+    ["a hook whose matcher is not a valid regular expression", { hooks: [{ event: "PreToolUse", command: "x", matcher: "(unclosed" }] }, /hooks\[0\]\.matcher is not a valid regular expression/],
     ["mcpServers that is a list", { mcpServers: [] }, /mcpServers must be an object/],
     ["an MCP server with no command", { mcpServers: { s: {} } }, /mcpServers\.s\.command must be a non-empty string/],
     ["an MCP server whose args are not strings", { mcpServers: { s: { command: "x", args: [1] } } }, /mcpServers\.s\.args must be a list of strings/],

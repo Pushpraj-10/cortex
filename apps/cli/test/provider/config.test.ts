@@ -9,6 +9,7 @@ import {
   MissingOllamaModelError,
   PROVIDER_ENV,
   PROVIDER_IDS,
+  PROVIDER_KEY_VARIABLES,
   credentialsToEnv,
   isProviderId,
   layerEnv,
@@ -17,6 +18,7 @@ import {
   resolveOllamaConfig,
   resolveProvider,
   selectProvider,
+  withholdProviderKeys,
 } from "../../src/provider/config.js";
 
 describe("resolveOllamaConfig", () => {
@@ -225,5 +227,41 @@ describe("DEFAULT_BASE_URLS", () => {
     expect(DEFAULT_BASE_URLS.google.startsWith("https://")).toBe(true);
     expect(DEFAULT_BASE_URLS.anthropic.startsWith("https://")).toBe(true);
     expect(DEFAULT_BASE_URLS.ollama).toBe("http://localhost:11434");
+  });
+});
+
+describe("withholdProviderKeys", () => {
+  it("names the variables that hold a provider's key, from what the providers read", () => {
+    expect([...PROVIDER_KEY_VARIABLES].sort()).toEqual(["ANTHROPIC_API_KEY", "GOOGLE_API_KEY"]);
+    for (const id of PROVIDER_IDS) {
+      const key = PROVIDER_ENV[id].apiKey;
+      if (key) expect(PROVIDER_KEY_VARIABLES).toContain(key);
+    }
+  });
+
+  it("removes the keys and nothing else, and says which it removed", () => {
+    const env: NodeJS.ProcessEnv = {
+      GOOGLE_API_KEY: "g",
+      ANTHROPIC_API_KEY: "a",
+      GOOGLE_MODEL: "gemini",
+      ANTHROPIC_BASE_URL: "https://api.example.com",
+      GITHUB_TOKEN: "someone else's",
+      PATH: "/bin",
+    };
+
+    expect(withholdProviderKeys(env).sort()).toEqual(["ANTHROPIC_API_KEY", "GOOGLE_API_KEY"]);
+    expect(env).toEqual({ GOOGLE_MODEL: "gemini", ANTHROPIC_BASE_URL: "https://api.example.com", GITHUB_TOKEN: "someone else's", PATH: "/bin" });
+  });
+
+  it("has nothing to say when there is nothing to remove", () => {
+    const env: NodeJS.ProcessEnv = { PATH: "/bin" };
+    expect(withholdProviderKeys(env)).toEqual([]);
+    expect(env).toEqual({ PATH: "/bin" });
+  });
+
+  it("removes an empty key too, so a blank variable is not left behind", () => {
+    const env: NodeJS.ProcessEnv = { GOOGLE_API_KEY: "" };
+    expect(withholdProviderKeys(env)).toEqual(["GOOGLE_API_KEY"]);
+    expect("GOOGLE_API_KEY" in env).toBe(false);
   });
 });

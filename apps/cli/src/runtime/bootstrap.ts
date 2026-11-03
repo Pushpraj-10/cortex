@@ -31,7 +31,7 @@ import {
 } from "@cortex/providers";
 import { builtinTools, registerTool } from "@cortex/tools";
 import { createPermissionBridge, type PermissionBridge } from "./permission-bridge.js";
-import { credentialsToEnv, layerEnv, selectProvider } from "../provider/config.js";
+import { credentialsToEnv, layerEnv, selectProvider, withholdProviderKeys } from "../provider/config.js";
 import { createProviderManager, type ProviderManager } from "../provider/manager.js";
 import { resolveProjectTrust, type ConfirmTrust } from "./trust.js";
 
@@ -107,7 +107,10 @@ export async function bootstrap(options: BootOptions): Promise<Result<Boot>> {
   }
 
   // Saved provider settings sit under the real environment, which wins when both are set.
-  const realEnv = options.env ?? process.env;
+  // Cortex works from its own copy of the environment. In a real run the provider keys are then taken out of `process.env`,
+  // which every command, hook and MCP server Cortex starts inherits; a server that needs a key is given it in its own `env`.
+  const realEnv: NodeJS.ProcessEnv = { ...(options.env ?? process.env) };
+  if (options.env === undefined) withholdProviderKeys(process.env);
   const choice = selectProvider(layerEnv(credentialsToEnv(credentials), realEnv));
   // Nothing configured yet is not fatal in the UI — the user fixes it with /provider. A non-interactive run,
   // or a CORTEX_PROVIDER that names no provider, cannot be fixed from here and still fails.

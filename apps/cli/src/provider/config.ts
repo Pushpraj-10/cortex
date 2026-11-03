@@ -133,6 +133,21 @@ export const PROVIDER_ENV: Record<ProviderId, { apiKey?: string; model: string; 
   anthropic: { apiKey: "ANTHROPIC_API_KEY", model: "ANTHROPIC_MODEL", baseUrl: "ANTHROPIC_BASE_URL" },
 };
 
+/** The environment variables that hold a provider's API key. */
+export const PROVIDER_KEY_VARIABLES: readonly string[] = PROVIDER_IDS.flatMap((id) => PROVIDER_ENV[id].apiKey ?? []);
+
+/**
+ * Removes the provider API keys from `env` and returns the names it removed. Cortex reads its keys once, into its own copy
+ * of the environment; what stays in `process.env` is inherited by everything Cortex starts (the commands it runs, hooks, MCP
+ * servers), and none of them has any use for the key it talks to its model with, while a hook or a stray `env` would
+ * happily print or send it.
+ */
+export function withholdProviderKeys(env: NodeJS.ProcessEnv): string[] {
+  const removed = PROVIDER_KEY_VARIABLES.filter((name) => env[name] !== undefined);
+  for (const name of removed) delete env[name];
+  return removed;
+}
+
 /** Where each provider's API is when no server URL is given. */
 export const DEFAULT_BASE_URLS: Record<ProviderId, string> = {
   ollama: DEFAULT_OLLAMA_BASE_URL,

@@ -11,6 +11,7 @@ import {
   summarizeToolCall,
   toolKindOf,
 } from "../../format/tool-calls.js";
+import { safeText } from "../../format/terminal-safe.js";
 import type { PermissionBridge, PermissionRequest } from "../../runtime/permission-bridge.js";
 import type { TimelineEntry, ToolCallEntry } from "../types.js";
 
@@ -159,13 +160,15 @@ export function useChat(session: AgentSession, permissions: PermissionBridge, cw
         if (event.type === "messageDelta") {
           if (userCancelledRef.current) continue;
           charsRef.current += event.delta.length;
+          // What a model writes is not trusted to be only text: a reply that carries terminal escape sequences must not drive the terminal.
+          const delta = safeText(event.delta);
           if (!streamingIdRef.current) {
             const id = nextId("assistant");
             streamingIdRef.current = id;
             setOutputChars(charsRef.current);
-            append({ kind: "message", id, role: "assistant", content: event.delta, streaming: true });
+            append({ kind: "message", id, role: "assistant", content: delta, streaming: true });
           } else {
-            pendingDeltaRef.current += event.delta;
+            pendingDeltaRef.current += delta;
             if (!flushTimerRef.current) flushTimerRef.current = setTimeout(flushDelta, STREAM_FLUSH_MS);
           }
         } else if (event.type === "context") {
@@ -210,11 +213,12 @@ export function useChat(session: AgentSession, permissions: PermissionBridge, cw
           // failure keeps whatever was written before it and goes in a message of its own.
           const failed = isLlmFailureMessage(event.content);
           const wasStreaming = streamingIdRef.current !== null;
-          if (wasStreaming) endStreaming(failed || userCancelledRef.current ? undefined : event.content);
+          const content = safeText(event.content);
+          if (wasStreaming) endStreaming(failed || userCancelledRef.current ? undefined : content);
           // A streamed message that completed is already on screen (its text was replaced just above); anything else is new.
           const alreadyOnScreen = wasStreaming && !failed;
           if (!userCancelledRef.current && !alreadyOnScreen) {
-            append({ kind: "message", id: nextId("assistant"), role: "assistant", content: event.content, isError: failed });
+            append({ kind: "message", id: nextId("assistant"), role: "assistant", content, isError: failed });
           }
         }
       }
@@ -258,7 +262,8 @@ export function useChat(session: AgentSession, permissions: PermissionBridge, cw
     submit,
     cancel,
     answerPermission,
-    notify: (text) => append({ kind: "notice", id: nextId("notice"), text }),
+    // A notice can carry text from a server (an error body), so it is made safe like everything else that came from outside.
+    notify: (text) => append({ kind: "notice", id: nextId("notice"), text: safeText(text) }),
     reset: () => {
       if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
       flushTimerRef.current = null;

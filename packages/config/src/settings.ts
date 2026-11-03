@@ -58,6 +58,14 @@ function checkSettings(parsed: unknown, file: string): SettingsFile {
       if (!isRecord(hook) || !HOOK_EVENTS.includes(hook.event as string)) throw invalid(`hooks[${index}].event must be one of ${HOOK_EVENTS.join(", ")}`);
       if (typeof hook.command !== "string" || hook.command.trim() === "") throw invalid(`hooks[${index}].command must be a non-empty string`);
       if (hook.matcher !== undefined && typeof hook.matcher !== "string") throw invalid(`hooks[${index}].matcher must be a string`);
+      if (typeof hook.matcher === "string") {
+        try {
+          new RegExp(`^(?:${hook.matcher})$`);
+        } catch {
+          // A hook that cannot say which calls it covers cannot be allowed to quietly cover none of them.
+          throw invalid(`hooks[${index}].matcher is not a valid regular expression`);
+        }
+      }
     });
   }
 

@@ -401,3 +401,55 @@ describe("useChat: live status", () => {
     unmount();
   });
 });
+
+describe("useChat: text from outside is safe to print", () => {
+  const ESC = "\u001b";
+  const BEL = "\u0007";
+  const messages = (chat: Chat) => chat.timeline.filter((entry): entry is MessageEntry => entry.kind === "message" && entry.role === "assistant");
+  const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+  it("a model reply cannot carry terminal escape sequences onto the screen, streamed or final", async () => {
+    const { chat, unmount } = mount(async function* () {
+      yield { type: "messageDelta", delta: `Hello${ESC}[2J` };
+      yield { type: "messageDelta", delta: ` wor${ESC}]52;c;AAAA${BEL}ld` };
+      await wait(120);
+      yield { type: "message", content: `Hello${ESC}[2J world${BEL}!` };
+    });
+
+    const done = chat().submit("go");
+    await settle();
+    await wait(60);
+    for (const entry of messages(chat())) expect(entry.content).not.toMatch(/[\u001b\u0007]/);
+
+    await done;
+    await settle();
+
+    expect(messages(chat())).toHaveLength(1);
+    expect(messages(chat())[0]!.content).toBe("Hello world\\u0007!");
+    unmount();
+  });
+
+  it("an error message that came from a server is made safe too", async () => {
+    const { chat, unmount } = mount(async function* () {
+      yield { type: "message", content: `${LLM_ERROR_PREFIX}: server said${ESC}[2J no${BEL}` };
+    });
+
+    await chat().submit("go");
+    await settle();
+
+    const text = messages(chat()).map((entry) => entry.content).join("\n");
+    expect(text).toContain("server said");
+    expect(text).not.toMatch(/[\u001b\u0007]/);
+    unmount();
+  });
+
+  it("a notice is made safe, so provider errors and other text from outside cannot drive the terminal", async () => {
+    const { chat, unmount } = mount(async function* () {});
+    chat().notify(`Could not list the models: server said${ESC}]52;c;AAAA${BEL} no${ESC}[2J\rfake prompt`);
+    await settle();
+
+    const notice = chat().timeline.find((entry) => entry.kind === "notice");
+    expect(notice).toMatchObject({ text: "Could not list the models: server said no\nfake prompt" });
+    unmount();
+  });
+});

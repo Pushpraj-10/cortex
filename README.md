@@ -226,7 +226,11 @@ npm run test:e2e         # live-model scripts in tests/ (needs Ollama running)
 
 Conventions: related small things live in one commented file per feature rather than one function per file, and each package's `test/` mirrors its `src/`. Commit messages follow [CLAUDE.md](CLAUDE.md).
 
-> **Known limit:** `run_command` is gated only by approval, not sandboxed.
+> **Known limit:** `run_command` is gated only by approval, not sandboxed. Around that approval, Cortex bounds it: a command is stopped after at most 10 minutes (the model asks for a time, and "0" or a huge number means the default of 2 minutes or the ceiling, never "forever"), after 10 MiB of output, and when you cancel; and **your provider API keys (`GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`) are removed from the environment** every command, hook and MCP server inherits, since none of them needs the key Cortex talks to its model with. If one of your own tools needs the same variable, give that tool its own (an MCP server can be given a key in its `env` setting). Other variables, such as `GITHUB_TOKEN`, are yours and pass through.
+>
+> **Hooks fail closed.** A `PreToolUse` or `UserPromptSubmit` hook that cannot be started, is not found, times out or is killed blocks the call instead of being skipped (any other non-zero exit is still ignored; only exit code 2 blocks on purpose).
+>
+> **Terminal safety.** Everything shown from outside, such as command output, a file's contents, a model's reply, a server's error, and the command or diff in an approval window, has escape sequences removed (title and clipboard writes, cursor and screen control, hyperlinks) and other control characters written out as `\uXXXX`. Colour in command output is kept. A carriage return becomes a line break, so a command cannot overwrite what you were shown.
 
 ## ⭐ Support
 

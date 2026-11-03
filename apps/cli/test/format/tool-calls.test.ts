@@ -252,3 +252,68 @@ describe("firstSentence", () => {
     expect(firstSentence("")).toBe("");
   });
 });
+
+describe("tool-call text is safe to print", () => {
+  const ESC = "\u001b";
+  const BEL = "\u0007";
+
+  beforeAll(() => {
+    registerTool({
+      name: "terminal-safe-test-tool",
+      description: "A tool whose summary and preview are built from its arguments",
+      kind: "execute",
+      parametersSchema: {},
+      summarize: (args) => `Run ${(args as { command: string }).command}`,
+      preview: async (args) => ({ kind: "command", command: (args as { command: string }).command }),
+      handler: async () => ok(null),
+    });
+    registerTool({
+      name: "terminal-safe-test-diff",
+      description: "A tool that previews a diff built from file contents",
+      kind: "edit",
+      parametersSchema: {},
+      preview: async () => ({ kind: "diff", path: `we${ESC}[2Jird.txt`, before: `old${ESC}]0;t${BEL}`, after: `new\rhidden${ESC}[31m`, startLine: 1 }),
+      handler: async () => ok(null),
+    });
+  });
+
+  it("a summary built from the model's arguments cannot move or recolour the terminal, and a stray control shows as \\uXXXX", () => {
+    const summary = summarizeToolCall("terminal-safe-test-tool", { command: `echo hi${ESC}[2J${ESC}]52;c;AAAA${BEL}\rrm -rf ~\u0007` });
+    expect(summary).toBe("Run echo hi\nrm -rf ~\\u0007");
+    expect(summary).not.toContain(ESC);
+  });
+
+  it("an unregistered tool's name is made safe too", () => {
+    expect(summarizeToolCall(`nope${ESC}[2J`, {})).toBe("Run nope");
+  });
+
+  it("the command an approval shows is exactly what would run, with controls visible instead of acting", async () => {
+    const preview = await previewToolCall("terminal-safe-test-tool", { command: `ls\u0008\u0008rm x${ESC}[2K` }, process.cwd());
+    expect(preview).toEqual({ kind: "command", command: "ls\\u0008\\u0008rm x" });
+  });
+
+  it("a diff shown for approval is safe in its path and both its sides, and keeps its other fields", async () => {
+    const preview = await previewToolCall("terminal-safe-test-diff", {}, process.cwd());
+    expect(preview).toEqual({ kind: "diff", path: "weird.txt", before: "old", after: "new\nhidden", startLine: 1 });
+  });
+
+  it("a failure message from outside is made safe before it is shown", () => {
+    expect(errorSummary(`server said:${ESC}[2J fail${BEL}\nsecond line`)).toBe("server said: fail\\u0007");
+    expect(errorSummary({ error: `bad${ESC}]0;x${BEL}thing` })).toBe("badthing");
+  });
+
+  it("command output keeps its colour but loses everything else that acts on the terminal", () => {
+    const detail = formatToolResultDetail({ output: `${ESC}[32mPASS${ESC}[0m${ESC}[2J${ESC}[H\r${ESC}]52;c;AAAA${BEL}done`, exitCode: 0, timedOut: false });
+    expect(detail).toBe(`${ESC}[32mPASS${ESC}[0m\ndone`);
+  });
+
+  it("cuts long output before making it safe, so a colour sequence the cut split cannot be left open", () => {
+    const detail = formatToolResultDetail({ output: `${"a".repeat(1999)}${ESC}[31mred and more`, exitCode: 0, timedOut: false });
+    expect(detail.endsWith("\n… (truncated)")).toBe(true);
+    expect(detail).not.toContain(ESC);
+  });
+
+  it("a plain string result is made safe as well", () => {
+    expect(formatToolResultDetail(`text${ESC}[2Jmore`)).toBe("textmore");
+  });
+});

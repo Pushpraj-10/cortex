@@ -341,3 +341,86 @@ describe("bootstrap: a project's own settings", () => {
     if (result.ok) result.value.close();
   });
 });
+
+describe("bootstrap: provider keys and what Cortex starts", () => {
+  let root: string;
+  let cwd: string;
+  let home: string;
+
+  beforeEach(async () => {
+    root = await fs.mkdtemp(path.join(process.cwd(), "test-"));
+    cwd = path.join(root, "project");
+    home = path.join(root, "home");
+    await fs.mkdir(cwd);
+    await fs.mkdir(home);
+  });
+
+  afterEach(async () => {
+    vi.unstubAllEnvs();
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
+  const printKey = (command = "node -e \"console.log(String(process.env.GOOGLE_API_KEY))\"") => getTool("run_command").handler({ command }, { cwd });
+
+  it("takes the provider keys out of the real environment, so a command it runs does not inherit them, while Cortex still uses the key", async () => {
+    vi.stubEnv("CORTEX_PROVIDER", "google");
+    vi.stubEnv("GOOGLE_API_KEY", "AIza-INHERIT-ME");
+    vi.stubEnv("GOOGLE_MODEL", "gemini-test");
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-INHERIT-ME");
+
+    const result = await bootstrap({ cwd, interactive: true, home }); // no env given: the real one
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(process.env.GOOGLE_API_KEY).toBeUndefined();
+    expect(process.env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(process.env.GOOGLE_MODEL).toBe("gemini-test"); // only the keys go
+
+    // Cortex kept its own copy: the provider works, and /provider still sees that a key is set.
+    expect(result.value.providers.active()).toEqual({ provider: "google", model: "gemini-test" });
+    const status = await result.value.providers.status();
+    expect(status.find((entry) => entry.id === "google")).toMatchObject({ configured: true, hasKey: true });
+    expect(status.find((entry) => entry.id === "anthropic")).toMatchObject({ hasKey: true });
+
+    // And a real command, run the way the agent runs one, sees no key.
+    const ran = await printKey();
+    expect(ran.ok && (ran.value as { output: string }).output).toBe("undefined");
+    expect(JSON.stringify(ran)).not.toContain("AIza-INHERIT-ME");
+    result.value.close();
+  });
+
+  it("leaves the real environment alone when it is handed an environment of its own, as the tests and embedders do", async () => {
+    vi.stubEnv("GOOGLE_API_KEY", "still-here");
+    const given = { OLLAMA_MODEL: "llama3.1", GOOGLE_API_KEY: "in-the-object" };
+
+    const result = await bootstrap({ cwd, interactive: true, env: given, home });
+
+    expect(result.ok).toBe(true);
+    expect(process.env.GOOGLE_API_KEY).toBe("still-here");
+    expect(given).toEqual({ OLLAMA_MODEL: "llama3.1", GOOGLE_API_KEY: "in-the-object" });
+  });
+
+  it("does not hand a key to an MCP server that was not given one, but does to one that names it", async () => {
+    vi.stubEnv("OLLAMA_MODEL", "llama3.1");
+    vi.stubEnv("GOOGLE_API_KEY", "AIza-FOR-THE-SERVER-ONLY-IF-ASKED");
+    const dump = "require('fs').writeFileSync(process.argv[1], String(process.env.GOOGLE_API_KEY))";
+    await fs.mkdir(path.join(home, ".cortex"), { recursive: true });
+    await fs.writeFile(
+      path.join(home, ".cortex", "settings.json"),
+      JSON.stringify({
+        mcpServers: {
+          plain: { command: "node", args: ["-e", dump, "plain.txt"] },
+          asked: { command: "node", args: ["-e", dump, "asked.txt"], env: { GOOGLE_API_KEY: "given-explicitly" } },
+        },
+      }),
+    );
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const result = await bootstrap({ cwd, interactive: true, home });
+
+    errors.mockRestore();
+    expect(result.ok).toBe(true);
+    expect(await fs.readFile(path.join(cwd, "plain.txt"), "utf-8")).toBe("undefined");
+    expect(await fs.readFile(path.join(cwd, "asked.txt"), "utf-8")).toBe("given-explicitly");
+  });
+});

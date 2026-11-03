@@ -1,6 +1,7 @@
 /** How tool calls and the agent's messages are described in the transcript. */
 import { LLM_ERROR_PREFIX } from "@cortex/agent";
 import { getTool, type ToolKind, type ToolPreview } from "@cortex/tools";
+import { safeText } from "./terminal-safe.js";
 
 const MAX_DETAIL_LENGTH = 2000;
 
@@ -16,11 +17,12 @@ export type ToolStatus = "running" | "awaiting" | "success" | "error" | "decline
 export function summarizeToolCall(toolName: string, args: unknown): string {
   try {
     const summary = getTool(toolName).summarize?.(args as never);
-    if (summary) return summary;
+    // The summary is built from the model's arguments and is what the approval window shows, so it is made safe to print.
+    if (summary) return safeText(summary);
   } catch {
     /* unregistered tool or args the summarizer could not read */
   }
-  return `Run ${toolName}`;
+  return `Run ${safeText(toolName)}`;
 }
 
 /**
@@ -35,7 +37,12 @@ export function statusOfResult(result: { ok: boolean; refused?: boolean }): "suc
 /** What the tool says a call will do, found before it runs. Never throws: no preview is just no preview. */
 export async function previewToolCall(toolName: string, args: unknown, cwd: string): Promise<ToolPreview | undefined> {
   try {
-    return await getTool(toolName).preview?.(args as never, { cwd });
+    const preview = await getTool(toolName).preview?.(args as never, { cwd });
+    if (!preview) return undefined;
+    // What the user is shown to approve: the command, or the file's old and new text. Control characters show as \uXXXX rather than act.
+    return preview.kind === "command"
+      ? { ...preview, command: safeText(preview.command) }
+      : { ...preview, path: safeText(preview.path), before: safeText(preview.before), after: safeText(preview.after) };
   } catch {
     return undefined;
   }
@@ -65,7 +72,7 @@ export function errorSummary(output: unknown): string {
       : typeof output === "object" && output !== null && typeof (output as { error?: unknown }).error === "string"
         ? (output as { error: string }).error
         : "The call failed.";
-  return message.split("\n")[0]!;
+  return safeText(message).split("\n")[0]!;
 }
 
 /** The first sentence of a message. The executor's refusals are written for the model ("... Do not retry it unchanged"); a person needs only the start. */
@@ -90,7 +97,9 @@ function commandOutputText(output: unknown): string | undefined {
 /** Renders a tool's output for the expanded detail view, truncated so one big result cannot flood the screen. */
 export function formatToolResultDetail(output: unknown): string {
   const text = typeof output === "string" ? output : (commandOutputText(output) ?? JSON.stringify(output, null, 2) ?? String(output));
-  return text.length > MAX_DETAIL_LENGTH ? `${text.slice(0, MAX_DETAIL_LENGTH)}\n… (truncated)` : text;
+  const shortened = text.length > MAX_DETAIL_LENGTH ? `${text.slice(0, MAX_DETAIL_LENGTH)}\n… (truncated)` : text;
+  // Cut first, then made safe, so a colour sequence the cut split in two cannot be left half-open. Colour stays: it cannot move anything.
+  return safeText(shortened, { colour: true });
 }
 
 /** True for the one message the agent yields when the underlying model request fails; rendered as an error. */
