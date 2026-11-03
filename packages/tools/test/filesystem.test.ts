@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { copyFileTool, createDirectoryTool, deleteFileTool, editFileTool, fileExistsTool, getFileInfoTool, listDirectoryTool, moveFileTool, readFileTool, writeFileTool } from "../src/filesystem.js";
+import { MAX_READ_BYTES, copyFileTool, createDirectoryTool, deleteFileTool, editFileTool, fileExistsTool, getFileInfoTool, listDirectoryTool, moveFileTool, readFileTool, writeFileTool } from "../src/filesystem.js";
 import type { ToolExecutionContext } from "../src/types.js";
 
 describe("copyFileTool", () => {
@@ -787,5 +787,124 @@ describe("file tool previews", () => {
       await editFileTool.preview!({ path: "f.txt", oldString: "b", newString: "X" }, context);
       expect(await fs.readFile(path.join(tempDir, "f.txt"), "utf-8")).toBe("abc");
     });
+  });
+});
+
+describe("readFileTool: size and links", () => {
+  let tempDir: string;
+  let outside: string;
+  let context: ToolExecutionContext;
+
+  beforeEach(async () => {
+    tempDir = await fs.mkdtemp(path.join(process.cwd(), "test-"));
+    outside = path.join(tempDir, "outside");
+    const workspace = path.join(tempDir, "ws");
+    await fs.mkdir(outside);
+    await fs.mkdir(workspace);
+    await fs.writeFile(path.join(outside, "secret.txt"), "OUTSIDE-THE-WORKSPACE");
+    context = { cwd: workspace };
+  });
+
+  afterEach(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("returns a small file whole, with nothing about truncation", async () => {
+    await fs.writeFile(path.join(context.cwd, "small.txt"), "hello");
+    expect(await readFileTool.handler({ path: "small.txt" }, context)).toEqual({ ok: true, value: { content: "hello" } });
+  });
+
+  it("returns a file of exactly the limit whole", async () => {
+    await fs.writeFile(path.join(context.cwd, "exact.txt"), "a".repeat(MAX_READ_BYTES));
+    const result = await readFileTool.handler({ path: "exact.txt" }, context);
+    expect(result.ok && result.value.content.length).toBe(MAX_READ_BYTES);
+    expect(result.ok && result.value.truncated).toBeUndefined();
+  });
+
+  it("returns only the start of a bigger file, saying so and how big it really is", async () => {
+    await fs.writeFile(path.join(context.cwd, "big.txt"), `${"a".repeat(MAX_READ_BYTES)}TAIL-NOT-READ`);
+    const result = await readFileTool.handler({ path: "big.txt" }, context);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.content).toBe("a".repeat(MAX_READ_BYTES));
+      expect(result.value.truncated).toBe(true);
+      expect(result.value.totalBytes).toBe(MAX_READ_BYTES + "TAIL-NOT-READ".length);
+    }
+  });
+
+  it("tells the model about the limit in its description", () => {
+    expect(readFileTool.description).toContain("1 MiB");
+    expect(readFileTool.description).toContain("truncated");
+  });
+
+  it("still reports a directory as a directory", async () => {
+    await fs.mkdir(path.join(context.cwd, "folder"));
+    const result = await readFileTool.handler({ path: "folder" }, context);
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.error.message).toMatch(/EISDIR|illegal operation on a directory/);
+  });
+
+  it("will not read through a link out of the workspace, and says why", async () => {
+    await fs.symlink(outside, path.join(context.cwd, "dirlink"), "junction");
+
+    const result = await readFileTool.handler({ path: "dirlink/secret.txt" }, context);
+
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.error.message).toContain("symbolic link or junction");
+    expect(JSON.stringify(result)).not.toContain("OUTSIDE-THE-WORKSPACE");
+  });
+
+  it("refuses a Windows device name, as the same unsafe-path error the other tools give", async () => {
+    const result = await readFileTool.handler({ path: "nul.txt" }, context);
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.error.message).toContain("device name");
+  });
+});
+
+describe("write and delete tools: links", () => {
+  let tempDir: string;
+  let outside: string;
+  let context: ToolExecutionContext;
+
+  beforeEach(async () => {
+    tempDir = await fs.mkdtemp(path.join(process.cwd(), "test-"));
+    outside = path.join(tempDir, "outside");
+    const workspace = path.join(tempDir, "ws");
+    await fs.mkdir(outside);
+    await fs.mkdir(workspace);
+    await fs.writeFile(path.join(outside, "keep.txt"), "KEEP");
+    await fs.symlink(outside, path.join(workspace, "dirlink"), "junction");
+    context = { cwd: workspace };
+  });
+
+  afterEach(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("write_file cannot create or overwrite a file beyond a link", async () => {
+    for (const target of ["dirlink/new.txt", "dirlink/keep.txt"]) {
+      const result = await writeFileTool.handler({ path: target, content: "PWNED" }, context);
+      expect(result.ok, target).toBe(false);
+    }
+    expect(await fs.readdir(outside)).toEqual(["keep.txt"]);
+    expect(await fs.readFile(path.join(outside, "keep.txt"), "utf-8")).toBe("KEEP");
+  });
+
+  it("edit_file, delete_file, move_file and copy_file leave the file beyond a link alone", async () => {
+    await fs.writeFile(path.join(context.cwd, "mine.txt"), "mine");
+
+    expect((await editFileTool.handler({ path: "dirlink/keep.txt", oldString: "KEEP", newString: "X" }, context)).ok).toBe(false);
+    expect((await deleteFileTool.handler({ path: "dirlink/keep.txt" }, context)).ok).toBe(false);
+    expect((await moveFileTool.handler({ from: "mine.txt", to: "dirlink/moved.txt" }, context)).ok).toBe(false);
+    expect((await copyFileTool.handler({ from: "mine.txt", to: "dirlink/copied.txt" }, context)).ok).toBe(false);
+
+    expect(await fs.readdir(outside)).toEqual(["keep.txt"]);
+    expect(await fs.readFile(path.join(outside, "keep.txt"), "utf-8")).toBe("KEEP");
+    expect(await fs.readFile(path.join(context.cwd, "mine.txt"), "utf-8")).toBe("mine");
+  });
+
+  it("file_exists says no for something beyond a link, the way it does for an escape", async () => {
+    expect(await fileExistsTool.handler({ path: "dirlink/keep.txt" }, context)).toEqual({ ok: true, value: { exists: false } });
   });
 });

@@ -98,9 +98,10 @@ export const searchFilesTool = defineTool<
       if (fileFilter && !fileFilter.test(file) && !fileFilter.test(path.posix.basename(file))) continue;
       let text: string;
       try {
-        text = await fs.readFile(path.join(root, file), "utf-8");
+        // Through the sandbox, not around it: the walk lists links as files, and one that points out of the workspace must not be read.
+        text = await fs.readFile(resolveWorkspacePath(context.cwd, path.relative(context.cwd, path.join(root, file))), "utf-8");
       } catch {
-        continue; // unreadable file: skip rather than fail the whole search
+        continue; // unreadable, or outside the workspace: skip rather than fail the whole search
       }
       if (text.includes("\0")) continue; // binary
       const lines = text.split("\n");

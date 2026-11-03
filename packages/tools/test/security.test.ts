@@ -55,3 +55,32 @@ describe("saveSecurityReportTool", () => {
     expect(isSecurityReportStage("other")).toBe(false);
   });
 });
+
+describe("saveSecurityReportTool: links", () => {
+  let tempDir: string;
+  let outside: string;
+  let context: ToolExecutionContext;
+
+  beforeEach(async () => {
+    tempDir = await fs.mkdtemp(path.join(process.cwd(), "test-"));
+    outside = path.join(tempDir, "outside");
+    const workspace = path.join(tempDir, "ws");
+    await fs.mkdir(outside);
+    await fs.mkdir(workspace);
+    context = { cwd: workspace };
+  });
+
+  afterEach(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("will not write a report through a .cortex that is a link out of the workspace", async () => {
+    await fs.symlink(outside, path.join(context.cwd, ".cortex"), "junction");
+
+    const result = await saveSecurityReportTool.handler({ stage: "scan", content: "# findings" }, context);
+
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.error.message).toContain("symbolic link or junction");
+    expect(await fs.readdir(outside)).toEqual([]); // nothing was created beyond the link
+  });
+});

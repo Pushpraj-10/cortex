@@ -78,3 +78,46 @@ describe("search tools", () => {
     expect((await searchFilesTool.handler({ pattern: "x", path: ".." }, context)).ok).toBe(false);
   });
 });
+
+describe("search_files: links", () => {
+  let tempDir: string;
+  let context: ToolExecutionContext;
+
+  beforeEach(async () => {
+    tempDir = await fs.mkdtemp(path.join(process.cwd(), "test-"));
+    const workspace = path.join(tempDir, "ws");
+    await fs.mkdir(path.join(tempDir, "outside"));
+    await fs.mkdir(workspace);
+    await fs.writeFile(path.join(tempDir, "outside", "secret.txt"), "TOPSECRET outside the workspace\n");
+    await fs.writeFile(path.join(workspace, "own.txt"), "TOPSECRET inside the workspace\n");
+    context = { cwd: workspace };
+  });
+
+  afterEach(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("does not return lines from a file that a link in the workspace points to outside it", async (testContext) => {
+    try {
+      await fs.symlink(path.join(tempDir, "outside", "secret.txt"), path.join(context.cwd, "innocent.txt"), "file");
+    } catch {
+      return testContext.skip(); // creating a file link needs a privilege this system has not granted
+    }
+
+    const result = await searchFilesTool.handler({ pattern: "TOPSECRET" }, context);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.matches.map((match) => match.file)).toEqual(["own.txt"]);
+      expect(JSON.stringify(result.value)).not.toContain("outside the workspace");
+    }
+  });
+
+  it("does not look inside a directory link that leads out, and lists nothing from beyond it", async () => {
+    await fs.symlink(path.join(tempDir, "outside"), path.join(context.cwd, "dirlink"), "junction");
+
+    const found = await searchFilesTool.handler({ pattern: "TOPSECRET" }, context);
+
+    expect(found.ok && found.value.matches.map((match) => match.file)).toEqual(["own.txt"]);
+  });
+});

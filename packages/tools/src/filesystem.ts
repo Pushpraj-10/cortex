@@ -34,15 +34,33 @@ interface FromToArgs {
 
 // ---- read-only -------------------------------------------------------------------
 
-export const readFileTool = defineTool<PathArgs, { content: string }>({
+/**
+ * Most bytes `read_file` loads from one file. It bounds memory, not what the model sees (the agent loop already cuts any
+ * tool result at 30,000 characters); a file this big is data or generated output, not something to read whole.
+ */
+export const MAX_READ_BYTES = 1024 * 1024;
+
+export const readFileTool = defineTool<PathArgs, { content: string; truncated?: true; totalBytes?: number }>({
   name: "read_file",
-  description: "Read the full contents of a file",
+  description: `Read the contents of a file (the first ${MAX_READ_BYTES / 1024 / 1024} MiB of a larger one, with truncated: true and its full size)`,
   kind: "read",
   parametersSchema: pathSchema("Path to the file (relative to workspace root)"),
   summarize: (args) => `Read ${argText(args?.path)}`,
   failure: (args) => `Failed to read file at ${args.path}`,
   async run(args, context) {
-    return { content: await fs.readFile(resolveWorkspacePath(context.cwd, args.path), "utf-8") };
+    const resolved = resolveWorkspacePath(context.cwd, args.path);
+    const { size } = await fs.stat(resolved);
+    if (size <= MAX_READ_BYTES) return { content: await fs.readFile(resolved, "utf-8") };
+
+    // Too big to load whole: read only the start, and say so, so the model does not take a prefix for the file.
+    const handle = await fs.open(resolved, "r");
+    try {
+      const buffer = Buffer.alloc(MAX_READ_BYTES);
+      const { bytesRead } = await handle.read(buffer, 0, MAX_READ_BYTES, 0);
+      return { content: buffer.subarray(0, bytesRead).toString("utf-8"), truncated: true, totalBytes: size };
+    } finally {
+      await handle.close();
+    }
   },
 });
 

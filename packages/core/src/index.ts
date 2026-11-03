@@ -5,5 +5,5 @@
  */
 
 export { CortexError, err, ok, type Result } from "./result.js";
-export { WorkspaceBoundaryError, resolveWorkspacePath } from "./workspace-path.js";
+export { UnsafePathError, WorkspaceBoundaryError, resolveWorkspacePath } from "./workspace-path.js";
 export type { Logger } from "./logger.js";

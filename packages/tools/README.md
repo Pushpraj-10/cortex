@@ -14,7 +14,7 @@ A tool may also offer `preview(args, context)`, which says what a call **will** 
 | `edit` | `write_file`, `edit_file`, `create_directory`, `copy_file`, `move_file`, `delete_file` |
 | `execute` | `run_command` |
 
-All paths go through `resolveWorkspacePath`, so a file tool cannot touch anything outside the workspace. `run_command` is the exception — a command can do anything, which is why it is `execute` and goes through approval. `edit_file` replaces the first occurrence and fails (rather than reporting success) when the text is not found. `find_files` and `search_files` skip `node_modules`, `.git` and `dist`.
+All paths go through `resolveWorkspacePath`, so a file tool cannot touch anything outside the workspace, including through a symbolic link or junction that leads out (`search_files` reads through it too). `read_file` loads at most 1 MiB of a file and says when it stopped (`truncated`, `totalBytes`). `run_command` is the exception — a command can do anything, which is why it is `execute` and goes through approval. `edit_file` replaces the first occurrence and fails (rather than reporting success) when the text is not found. `find_files` and `search_files` skip `node_modules`, `.git` and `dist`.
 
 ## Adding a tool
 
