@@ -9,6 +9,8 @@
  * so code, prose and chrome read as one design.
  */
 
+import type { AgentModeId } from "@cortex/agent";
+
 export const THEME_NAMES = ["dark", "light", "mono"] as const;
 export type ThemeName = (typeof THEME_NAMES)[number];
 
@@ -43,6 +45,8 @@ export interface Theme {
   };
   /** Code colours, one per scope the highlighter reports (see format/highlight.ts). */
   syntax: Record<"keyword" | "string" | "number" | "comment" | "title" | "type" | "builtin", string | undefined>;
+  /** One colour per agent (scan, suggest, fix) for its name in the status line; each is told apart at a glance from the others. */
+  agent: Record<AgentModeId, string | undefined>;
 }
 
 const dark: Theme = {
@@ -56,6 +60,7 @@ const dark: Theme = {
   status: { success: "#8FC79A", warning: "#D9B77E", error: "#FF7A85" },
   diff: { added: "#16281C", removed: "#3A1A1E" },
   syntax: { keyword: "#FF5A63", string: "#8FC79A", number: "#D9B77E", comment: "#858585", title: "#F5F5F5", type: "#8FC79A", builtin: "#D9B77E" },
+  agent: { scan: "#8FB4D9", suggest: "#B9A3D6", fix: "#86C5B5" }, // soft blue, lilac, teal: none is the brand red or the error pink
 };
 
 const light: Theme = {
@@ -69,6 +74,7 @@ const light: Theme = {
   status: { success: "#3F7A4A", warning: "#7B6637", error: "#A3182A" },
   diff: { added: "#DDEBDD", removed: "#F5DCDE" },
   syntax: { keyword: "#C4101A", string: "#3F7A4A", number: "#7B6637", comment: "#6B6B6B", title: "#1F1F1F", type: "#3F7A4A", builtin: "#7B6637" },
+  agent: { scan: "#2F5F8F", suggest: "#6B4E92", fix: "#2F7A66" },
 };
 
 const mono: Theme = {
@@ -82,6 +88,7 @@ const mono: Theme = {
   status: { success: undefined, warning: undefined, error: undefined },
   diff: { added: undefined, removed: undefined },
   syntax: { keyword: undefined, string: undefined, number: undefined, comment: undefined, title: undefined, type: undefined, builtin: undefined },
+  agent: { scan: undefined, suggest: undefined, fix: undefined },
 };
 
 const THEMES: Record<ThemeName, Theme> = { dark, light, mono };

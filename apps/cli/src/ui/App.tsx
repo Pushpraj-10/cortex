@@ -4,7 +4,7 @@ import { Box, useApp, useInput, useStdin } from "ink";
 import type { AgentModeId, AgentPolicy, AgentSession } from "@cortex/agent";
 import { PERMISSION_MODES, type PermissionMode } from "@cortex/policy";
 
-import { HELP_TEXT, runSlashCommand, slashCommands, type CommandHost } from "./commands.js";
+import { HELP_TEXT, nextAgent, runSlashCommand, slashCommands, type CommandHost } from "./commands.js";
 import { HistorySearchLine } from "./components/HistorySearchLine.js";
 import { InputBox } from "./components/InputBox.js";
 import { MessageList } from "./components/Messages.js";
@@ -207,8 +207,9 @@ export function App({
     notify: chat.notify,
   };
 
-  function submit() {
-    const text = input.value.trim();
+  /** Sends what is in the box, or `override` when something other than the box's text is being sent (a command picked from the menu). */
+  function submit(override?: string) {
+    const text = (override ?? input.value).trim();
     if (!text || chat.isThinking) return;
 
     input.set("", 0);
@@ -245,6 +246,12 @@ export function App({
       }
       if (key.ctrl && typed === "t") {
         chat.toggleLastToolCall();
+        return;
+      }
+      // ctrl+g steps to the next agent (none, scan, suggest, fix, none, ...). Not while a turn is running or a question is
+      // open: a turn's prompt and tool list were fixed when it began, so changing the agent under it would make them disagree.
+      if (key.ctrl && typed === "g") {
+        if (!chat.isThinking && !chat.pendingPermission && setup.stage === "idle") setAgent(nextAgent(agent));
         return;
       }
 
@@ -340,8 +347,13 @@ export function App({
           setSlashIndex((i) => Math.min(filteredCommands.length - 1, i + 1));
           return;
         }
-        if (key.tab || key.return) {
+        // tab fills the name in, so an argument can be added (`/mode plan`); enter runs the highlighted command at once.
+        if (key.tab) {
           acceptSlashCommand(filteredCommands[clampedSlashIndex]!);
+          return;
+        }
+        if (key.return) {
+          submit(`/${filteredCommands[clampedSlashIndex]!.name}`);
           return;
         }
         if (key.escape) {

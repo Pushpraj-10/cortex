@@ -72,6 +72,7 @@ cortex -p "explain what src/index.ts does"     # the answer goes to stdout
 | `enter` | send |
 | `shift+enter`, or `\` then `enter` | new line |
 | `shift+tab` | cycle the permission mode |
+| `ctrl+g` | cycle the agent: none → `scan` → `suggest` → `fix` (not while the agent is working or asking) |
 | `esc` | interrupt the agent |
 | `ctrl+t` | expand the last tool call |
 | `?` (empty box) | show the shortcuts |
@@ -105,7 +106,7 @@ Messages are remembered between sessions, per project, in `~/.cortex/history/` (
 | `suggest` | proposes a fix for each finding, with trade-offs and a priority order | read tools only | `suggestions.md` |
 | `fix` | applies the fixes, then runs the project's tests | read, edit and run tools | `fixes.md` |
 
-The agent is separate from the permission mode, which still applies: `fix` in `plan` mode cannot edit, and `fix` asks before each edit unless the mode allows it. Saving a report is an edit, so `scan` and `suggest` ask once to save theirs (or use `acceptEdits`, which is safe for them because they can edit nothing else). In a one-shot run, use `cortex --agent scan --mode acceptEdits -p "audit src/"`.
+Switch agents with `/agent <name>` or by pressing `ctrl+g`, which steps through none → `scan` → `suggest` → `fix` and round again. The active agent is named, in its own colour, at the left of the line under the input box. The agent is separate from the permission mode, which still applies: `fix` in `plan` mode cannot edit, and `fix` asks before each edit unless the mode allows it. Saving a report is an edit, so `scan` and `suggest` ask once to save theirs (or use `acceptEdits`, which is safe for them because they can edit nothing else). In a one-shot run, use `cortex --agent scan --mode acceptEdits -p "audit src/"`.
 
 ### Approving a change
 

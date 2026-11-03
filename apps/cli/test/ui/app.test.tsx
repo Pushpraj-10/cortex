@@ -89,6 +89,179 @@ describe("App: /agent", () => {
   });
 });
 
+describe("App: ctrl+g switches the agent", () => {
+  const SHIFT_TAB = "\u001b[Z";
+  const newPolicy = (): AgentPolicy => ({ mode: "default", rules: { allow: [], deny: [] }, hooks: [], askPermission: async () => false });
+
+  it("steps through scan, suggest, fix and back to none, naming each in the status line", async () => {
+    const policy = newPolicy();
+    const a = await start({ policy });
+    expect(policy.agent).toBeUndefined();
+
+    await a.press(KEY.ctrlG);
+    expect(policy.agent).toBe("scan");
+    expect(a.screen()).toContain("scan agent (ctrl+g to cycle)");
+
+    await a.press(KEY.ctrlG);
+    expect(policy.agent).toBe("suggest");
+    expect(a.screen()).toContain("suggest agent");
+    expect(a.screen()).not.toContain("scan agent");
+
+    await a.press(KEY.ctrlG);
+    expect(policy.agent).toBe("fix");
+    expect(a.screen()).toContain("fix agent");
+
+    await a.press(KEY.ctrlG);
+    expect(policy.agent).toBeUndefined();
+    expect(a.screen()).not.toContain("fix agent");
+    expect(a.screen()).toContain("? for shortcuts");
+  });
+
+  it("does not type anything, and does not send anything to the agent", async () => {
+    const a = await start();
+    await a.type("ab");
+    await a.press(KEY.ctrlG);
+
+    expect(a.screen()).toContain("> ab");
+    expect(a.screen()).not.toContain("> abg");
+    expect(a.sent).toEqual([]);
+    expect(a.remembered).toEqual([]);
+  });
+
+  it("leaves the permission mode alone, and shift+tab leaves the agent alone", async () => {
+    const policy = newPolicy();
+    const a = await start({ policy });
+
+    await a.press(KEY.ctrlG);
+    await a.press(SHIFT_TAB);
+    expect(policy.mode).toBe("acceptEdits");
+    expect(policy.agent).toBe("scan");
+
+    await a.press(KEY.ctrlG);
+    expect(policy.mode).toBe("acceptEdits");
+    expect(policy.agent).toBe("suggest");
+  });
+
+  it("carries on from an agent chosen with /agent", async () => {
+    const policy = newPolicy();
+    const a = await start({ policy });
+    await a.type("/agent suggest");
+    await a.press(KEY.enter);
+    expect(policy.agent).toBe("suggest");
+
+    await a.press(KEY.ctrlG);
+    expect(policy.agent).toBe("fix");
+  });
+
+  it("does nothing while the agent is working, so a turn keeps the agent it began with", async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const session: AgentSession = {
+      // eslint-disable-next-line require-yield
+      async *chat() {
+        await gate;
+      },
+    };
+    const policy = newPolicy();
+    const a = await start({ policy, initialSession: session });
+    await a.press("go");
+    await a.press(KEY.enter);
+
+    await a.press(KEY.ctrlG);
+    expect(policy.agent).toBeUndefined();
+
+    release();
+    await settle();
+    await a.press(KEY.ctrlG);
+    expect(policy.agent).toBe("scan");
+  });
+
+  it("does nothing while the agent is waiting for an approval", async () => {
+    const permissions = createPermissionBridge();
+    const session: AgentSession = {
+      // eslint-disable-next-line require-yield
+      async *chat() {
+        await permissions.ask("approval-test-edit", { path: "a.ts" });
+      },
+    };
+    const policy = newPolicy();
+    const a = await start({ policy, permissions, initialSession: session });
+    await a.press("go");
+    await a.press(KEY.enter);
+    expect(a.screen()).toContain("Edit a.ts");
+
+    await a.press(KEY.ctrlG);
+    expect(policy.agent).toBeUndefined();
+    expect(a.screen()).toContain("Edit a.ts"); // still asking
+  });
+
+  it("does nothing while /provider is asking something", async () => {
+    const policy = newPolicy();
+    const a = await start({ policy });
+    await a.press("/provider");
+    await a.press(KEY.enter);
+    expect(a.screen()).toContain("Google Gemini");
+
+    await a.press(KEY.ctrlG);
+    expect(policy.agent).toBeUndefined();
+    expect(a.screen()).toContain("Google Gemini");
+  });
+});
+
+describe("App: choosing a command from the / menu", () => {
+  it("runs the highlighted command on the first enter, instead of only filling in its name", async () => {
+    const a = await start();
+    await a.type("/hel");
+    await a.press(KEY.enter);
+
+    expect(a.screen()).toContain("Commands:"); // /help's output
+    expect(a.screen()).not.toContain("> /help");
+    expect(a.sent).toEqual([]);
+    expect(a.remembered).toEqual(["/help"]);
+  });
+
+  it("runs the command picked with the arrow keys", async () => {
+    const policy: AgentPolicy = { mode: "default", rules: { allow: [], deny: [] }, hooks: [], askPermission: async () => false };
+    const a = await start({ policy });
+    await a.press("/");
+    const target = slashCommands.findIndex((command) => command.name === "model");
+    for (let step = 0; step < target; step++) await a.press(KEY.down);
+    await a.press(KEY.enter);
+
+    expect(a.screen()).toContain("Model: llama3 (ollama)");
+    expect(a.remembered).toEqual(["/model"]);
+  });
+
+  it("runs a command that takes an argument as if typed without one, showing its current value", async () => {
+    const a = await start();
+    await a.type("/mod");
+    await a.press(KEY.enter);
+
+    expect(a.screen()).toContain("Mode: default. Set one with /mode");
+  });
+
+  it("still fills the name in on tab, so an argument can be added", async () => {
+    const a = await start();
+    await a.type("/mod");
+    await a.press(KEY.tab);
+
+    expect(a.screen()).toContain("> /mode"); // the space after the name is there, but the screen text trims it
+    await a.type("plan");
+    expect(a.screen()).toContain("> /mode plan");
+    expect(a.remembered).toEqual([]);
+    expect(a.screen()).not.toContain("Mode: default");
+  });
+
+  it("does not run anything on enter when no command matches, but sends the line like any other", async () => {
+    const a = await start();
+    await a.type("/zzz");
+    await a.press(KEY.enter);
+
+    expect(a.screen()).toContain("Unknown command /zzz");
+    expect(a.sent).toEqual([]);
+  });
+});
+
 describe("App: menus and prompts are drawn over the transcript", () => {
   const size = { rows: 24, columns: 80 };
   /** The input box is 3 rows (one of text) and the status line 1, so a quiet screen has 20 rows of transcript. */
@@ -639,8 +812,7 @@ describe("App: an API key never reaches the history, the screen or the agent", (
   /** Opens /provider, picks Google (the second entry), and returns once it is asking for the key. */
   async function startAskingForGoogleKey(a: DrivenApp) {
     await a.press("/provider"); // in one piece, like a paste: how it was typed is not the point here
-    await a.press(KEY.enter); // the slash menu is open: the first enter completes the command's name
-    await a.press(KEY.enter); // the second runs it
+    await a.press(KEY.enter); // the slash menu is open: enter runs the highlighted command
     await a.press(KEY.down);
     await a.press(KEY.enter);
     expect(a.screen()).toContain("Google API key");
@@ -717,7 +889,6 @@ describe("App: picking a model in /provider", () => {
   /** Opens /provider, picks the provider at `position` in the picker (ollama, google, anthropic), and returns at its first question. */
   async function openProvider(a: DrivenApp, position: number) {
     await a.press("/provider");
-    await a.press(KEY.enter);
     await a.press(KEY.enter);
     for (let step = 0; step < position; step++) await a.press(KEY.down);
     await a.press(KEY.enter);

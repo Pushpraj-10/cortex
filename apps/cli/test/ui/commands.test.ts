@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { HELP_TEXT, runSlashCommand, slashCommands, type CommandHost } from "../../src/ui/commands.js";
+import { HELP_TEXT, nextAgent, runSlashCommand, slashCommands, type CommandHost } from "../../src/ui/commands.js";
 
 function host(overrides: Partial<CommandHost> = {}): CommandHost {
   return {
@@ -19,6 +19,29 @@ function host(overrides: Partial<CommandHost> = {}): CommandHost {
     ...overrides,
   };
 }
+
+describe("nextAgent", () => {
+  it("steps through none, scan, suggest, fix, and back to none", () => {
+    expect(nextAgent(undefined)).toBe("scan");
+    expect(nextAgent("scan")).toBe("suggest");
+    expect(nextAgent("suggest")).toBe("fix");
+    expect(nextAgent("fix")).toBeUndefined();
+  });
+
+  it("comes back to where it started after one full round", () => {
+    let agent = nextAgent(undefined);
+    const seen = [agent];
+    for (let step = 0; step < 3; step++) seen.push((agent = nextAgent(agent)));
+    expect(seen).toEqual(["scan", "suggest", "fix", undefined]);
+  });
+});
+
+describe("HELP_TEXT", () => {
+  it("lists the key that switches the agent next to the one that switches the mode", () => {
+    expect(HELP_TEXT).toContain("shift+tab next mode");
+    expect(HELP_TEXT).toContain("ctrl+g next agent");
+  });
+});
 
 describe("runSlashCommand", () => {
   it("ignores ordinary messages, including ones that start with a path", () => {

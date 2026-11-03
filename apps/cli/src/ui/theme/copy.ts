@@ -27,6 +27,7 @@ export const maxInputBoxLines = 10;
 export const tips = [
   "Type / to see every command, or /help for the keys.",
   "Press shift+tab to cycle the permission mode.",
+  "Press ctrl+g to cycle the agent: none, scan, suggest, fix.",
   "Name a file in your message (fix src/parser.ts) and Cortex reads it with its imports and tests.",
   "Press ctrl+t to expand the last tool call.",
   "Use /provider to switch between Ollama, Google and Anthropic without restarting.",

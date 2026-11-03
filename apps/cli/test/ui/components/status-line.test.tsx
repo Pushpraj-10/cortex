@@ -1,10 +1,11 @@
 import React from "react";
 import { describe, expect, it } from "vitest";
-import { StatusLine } from "../../../src/ui/components/StatusLine.js";
+import type { AgentModeId } from "@cortex/agent";
+import { AGENT_SYMBOLS, StatusLine } from "../../../src/ui/components/StatusLine.js";
 import { displayWidth } from "../../../src/format/table.js";
 import { renderFrame } from "../support/render-frame.js";
 
-const draw = (props: { model?: string; mode?: string; cwd?: string; agent?: string }, width = 80) =>
+const draw = (props: { model?: string; mode?: string; cwd?: string; agent?: AgentModeId }, width = 80) =>
   renderFrame(
     <StatusLine model={props.model ?? "llama3.1 (ollama)"} mode={props.mode ?? "default"} agent={props.agent} cwd={props.cwd ?? "D:\\proj\\demo"} />,
     width,
@@ -30,11 +31,58 @@ describe("StatusLine", () => {
 
   it("names the active agent first on the left, before the shortcuts hint or the permission mode", async () => {
     const plain = await draw({ agent: "scan" });
-    expect(plain.startsWith(" scan agent · ? for shortcuts")).toBe(true);
+    expect(plain.startsWith(` ${AGENT_SYMBOLS.scan} scan agent · ? for shortcuts`)).toBe(true);
     expect(plain.endsWith("llama3.1 (ollama) · D:\\proj\\demo")).toBe(true);
 
     const planning = await draw({ agent: "fix", mode: "plan" });
-    expect(planning.startsWith(" fix agent · ⏵⏵ plan mode on")).toBe(true);
+    expect(planning.startsWith(` ${AGENT_SYMBOLS.fix} fix agent · ⏵⏵ plan mode on`)).toBe(true);
+  });
+
+  it("marks each agent with its own symbol, none of them the permission mode's ⏵⏵", async () => {
+    const symbols = Object.values(AGENT_SYMBOLS);
+    expect(new Set(symbols).size).toBe(symbols.length);
+    for (const symbol of symbols) {
+      expect(symbol).not.toContain("⏵");
+      expect(displayWidth(symbol)).toBe(1); // one column, so the line's width arithmetic holds
+    }
+    for (const agent of ["scan", "suggest", "fix"] as const) {
+      const line = await draw({ agent });
+      expect(line.startsWith(` ${AGENT_SYMBOLS[agent]} ${agent} agent`)).toBe(true);
+    }
+  });
+
+  it("adds the agent's key hint only when the whole right side still fits beside it, never at the folder's expense", async () => {
+    const roomy = await draw({ agent: "scan" }, 140);
+    expect(roomy.startsWith(` ${AGENT_SYMBOLS.scan} scan agent (ctrl+g to cycle) · ? for shortcuts`)).toBe(true);
+    expect(roomy.endsWith("llama3.1 (ollama) · D:\\proj\\demo")).toBe(true);
+
+    // At 80 columns the hint would have cut the folder, so it is left out and the folder stays whole.
+    const snug = await draw({ agent: "scan" }, 80);
+    expect(snug).not.toContain("ctrl+g");
+    expect(snug.endsWith("llama3.1 (ollama) · D:\\proj\\demo")).toBe(true);
+
+    // A long folder needs the room itself.
+    const longFolder = await draw({ agent: "scan", cwd: `D:\\${"deeply\\".repeat(10)}project` }, 140);
+    expect(longFolder).not.toContain("ctrl+g");
+    expect(longFolder.endsWith("project")).toBe(true);
+  });
+
+  it("drops the agent's key hint before the permission mode's, when the line gets tight", async () => {
+    const roomy = await draw({ agent: "fix", mode: "plan" }, 140);
+    expect(roomy).toContain(`${AGENT_SYMBOLS.fix} fix agent (ctrl+g to cycle) · ⏵⏵ plan mode on (shift+tab to cycle)`);
+
+    const tight = await draw({ agent: "fix", mode: "plan" }, 80);
+    expect(tight).not.toContain("ctrl+g");
+    expect(tight).toContain(`${AGENT_SYMBOLS.fix} fix agent · ⏵⏵ plan mode on (shift+tab to cycle)`);
+
+    const tighter = await draw({ agent: "scan" }, 60);
+    expect(tighter).not.toContain("ctrl+g");
+    expect(tighter.startsWith(` ${AGENT_SYMBOLS.scan} scan agent · ? for shortcuts`)).toBe(true);
+  });
+
+  it.each(["scan", "suggest", "fix"] as const)("shows the %s agent's name in full, whatever the width allows", async (agent) => {
+    expect(await draw({ agent }, 140)).toContain(`${agent} agent (ctrl+g to cycle) ·`);
+    expect(await draw({ agent }, 70)).toContain(`${agent} agent`);
   });
 
   it("says nothing about an agent when none is active", async () => {

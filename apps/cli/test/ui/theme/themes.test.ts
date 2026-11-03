@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { AGENT_MODE_IDS } from "@cortex/agent";
 import { THEME_NAMES, getTheme, isThemeName, resolveThemeName, type Theme } from "../../../src/ui/theme/themes.js";
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -15,6 +16,7 @@ function colours(theme: Theme): (string | undefined)[] {
     ...Object.values(theme.status),
     ...Object.values(theme.diff),
     ...Object.values(theme.syntax),
+    ...Object.values(theme.agent),
   ];
 }
 
@@ -63,7 +65,7 @@ describe("themes", () => {
     for (const name of ["dark", "light"] as const) {
       const theme = getTheme(name);
       const reds = new Set(["primary", "error", "keyword"]);
-      for (const [label, colour] of Object.entries({ primary: theme.primary, secondary: theme.secondary, ...theme.status, ...theme.syntax })) {
+      for (const [label, colour] of Object.entries({ primary: theme.primary, secondary: theme.secondary, ...theme.status, ...theme.syntax, ...theme.agent })) {
         if (reds.has(label)) continue;
         expect(saturation(colour as string), `${name} ${label} ${colour}`).toBeLessThan(0.6);
       }
@@ -76,7 +78,8 @@ describe("themes", () => {
   });
 
   it("keeps all text colours readable (WCAG AA, 4.5:1) on a typical dark and light background", () => {
-    const text = (theme: Theme) => [theme.primary, theme.secondary, theme.muted, ...Object.values(theme.status), ...Object.values(theme.syntax)] as string[];
+    const text = (theme: Theme) =>
+      [theme.primary, theme.secondary, theme.muted, ...Object.values(theme.status), ...Object.values(theme.syntax), ...Object.values(theme.agent)] as string[];
     for (const colour of text(getTheme("dark"))) expect(contrast(colour, "#0D1117")).toBeGreaterThanOrEqual(4.5);
     for (const colour of text(getTheme("light"))) expect(contrast(colour, "#FFFFFF")).toBeGreaterThanOrEqual(4.5);
   });
@@ -89,6 +92,19 @@ describe("themes", () => {
     for (const name of ["dark", "light"] as const) {
       const { diff } = getTheme(name);
       expect(diff.added).not.toBe(diff.removed);
+    }
+  });
+
+  it("gives every agent its own colour, none of them the brand red or the error colour", () => {
+    for (const name of ["dark", "light"] as const) {
+      const theme = getTheme(name);
+      expect(Object.keys(theme.agent).sort()).toEqual([...AGENT_MODE_IDS].sort());
+      const colours = Object.values(theme.agent);
+      expect(new Set(colours).size, name).toBe(colours.length);
+      for (const colour of colours) {
+        expect(colour).not.toBe(theme.primary);
+        expect(colour).not.toBe(theme.status.error);
+      }
     }
   });
 

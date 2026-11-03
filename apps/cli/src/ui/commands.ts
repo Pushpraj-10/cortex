@@ -19,11 +19,18 @@ export const slashCommands: SlashCommand[] = [
   { name: "exit", description: "Exit Cortex" },
 ];
 
+/** What ctrl+g steps through: the general agent (none), then each agent in the order `/agent` lists them, then round again. */
+const AGENT_CYCLE: (AgentModeId | undefined)[] = [undefined, ...AGENT_MODE_IDS];
+
+export function nextAgent(current: AgentModeId | undefined): AgentModeId | undefined {
+  return AGENT_CYCLE[(AGENT_CYCLE.indexOf(current) + 1) % AGENT_CYCLE.length];
+}
+
 export const HELP_TEXT = [
   "Commands:",
   ...slashCommands.map((command) => `  /${command.name.padEnd(6)} ${command.description}`),
   "",
-  "Keys: enter send · shift+enter newline · shift+tab next mode · esc interrupt · ctrl+t expand last tool call · ctrl+c quit",
+  "Keys: enter send · shift+enter newline · shift+tab next mode · ctrl+g next agent · esc interrupt · ctrl+t expand last tool call · ctrl+c quit",
   `Modes: ${PERMISSION_MODES.join(" | ")}`,
   `Agents: ${AGENT_MODE_IDS.join(" | ")} — /agent <name> switches; /agent off returns to the general agent`,
   `Providers: ${PROVIDER_IDS.join(" | ")} — /provider <name> sets one up; /provider remove <name> forgets its saved key`,

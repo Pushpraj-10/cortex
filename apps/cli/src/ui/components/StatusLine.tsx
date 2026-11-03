@@ -1,5 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
+import type { AgentModeId } from "@cortex/agent";
 import { contextPercent, layoutStatus, type StatusParts } from "../../format/status.js";
 import { displayWidth } from "../../format/table.js";
 import { useTerminalSize } from "../hooks/terminal.js";
@@ -8,8 +9,8 @@ import { useTheme } from "../theme/ThemeContext.js";
 
 interface StatusLineProps extends StatusParts {
   mode: string;
-  /** The active agent (scan, suggest, fix), if any; named first on the left. */
-  agent?: string;
+  /** The active agent (scan, suggest, fix), if any; named first on the left, in that agent's colour. */
+  agent?: AgentModeId;
 }
 
 /** How each non-default permission mode is announced; the default mode says nothing. */
@@ -20,6 +21,13 @@ const MODE_NOTES: Record<string, string> = {
 };
 
 const MODE_CYCLE_HINT = " (shift+tab to cycle)";
+const AGENT_CYCLE_HINT = " (ctrl+g to cycle)";
+
+/**
+ * The mark drawn before each agent's name, as `⏵⏵` marks the permission mode. They are told apart from the mode's, and from each
+ * other, by shape as well as colour, so the agents still read apart in the mono theme and under `NO_COLOR`.
+ */
+export const AGENT_SYMBOLS: Record<AgentModeId, string> = { scan: "◎", suggest: "✎", fix: "✦" };
 /** The context percentage turns amber here, and rose at the second threshold, so a full context is noticed before it is compacted. */
 const CONTEXT_WARN_PERCENT = 75;
 const CONTEXT_ALERT_PERCENT = 90;
@@ -39,13 +47,33 @@ export function StatusLine({ mode, agent, ...parts }: StatusLineProps) {
   const { columns } = useTerminalSize();
   const note = MODE_NOTES[mode];
 
-  // The mode note comes first and the cycle hint is dropped when there is not room for it and a little of the right side too;
-  // if even the note is wider than the terminal it is cut, so the line never wraps.
-  const agentLead = agent ? `${agent} agent · ` : "";
-  const variants = (note ? [`⏵⏵ ${note}${MODE_CYCLE_HINT}`, `⏵⏵ ${note}`] : [shortcutsHint]).map((text) => agentLead + text);
-  const lead = agentLead ? <Text color={theme.secondary}>{agentLead}</Text> : null;
+  // The widest wording that fits is used, and the hints go in order of least importance: the agent's `(ctrl+g to cycle)`
+  // first, then the mode's `(shift+tab to cycle)`. The room wanted is the left side, a little of the model, and the margins;
+  // if even the shortest is wider than the terminal it is cut, so the line never wraps.
+  const agentName = agent ? `${AGENT_SYMBOLS[agent]} ${agent} agent` : "";
+  const agentLead = agent ? `${agentName} · ` : "";
+  const modeTexts = note ? [`⏵⏵ ${note}${MODE_CYCLE_HINT}`, `⏵⏵ ${note}`] : [shortcutsHint];
   const wanted = Math.min(displayWidth(parts.model), MAX_MODEL_WIDTH_WANTED);
-  const leftText = variants.find((text) => displayWidth(text) + wanted + PADDING + GAP <= columns) ?? variants[variants.length - 1]!;
+  // The agent's hint is a convenience, so it never costs the right side anything: it is shown only when the model, context,
+  // branch and folder all still fit whole beside it. The mode hint, as before, may take a little of the folder.
+  const rightSide = layoutStatus(parts, Number.MAX_SAFE_INTEGER).filter((segment) => segment.text !== "");
+  const wholeRight = rightSide.reduce((width, segment, index) => width + displayWidth(segment.text) + (index > 0 ? 3 : 0), 0);
+  const variants = [
+    ...(agent ? [{ agentHint: true, room: wholeRight, text: `${agentName}${AGENT_CYCLE_HINT} · ${modeTexts[0]}` }] : []),
+    ...modeTexts.map((text) => ({ agentHint: false, room: wanted, text: agentLead + text })),
+  ];
+  const chosen = variants.find((variant) => displayWidth(variant.text) + variant.room + PADDING + GAP <= columns) ?? variants[variants.length - 1]!;
+  const leftText = chosen.text;
+  // The agent's name in its own colour (bold), then the muted hint when there is room for it.
+  const lead = agent ? (
+    <>
+      <Text color={theme.agent[agent]} bold>
+        {agentName}
+      </Text>
+      {chosen.agentHint ? AGENT_CYCLE_HINT : ""}
+      {" · "}
+    </>
+  ) : null;
   const leftWidth = Math.min(displayWidth(leftText), Math.max(0, columns - PADDING));
   const segments = layoutStatus(parts, columns - PADDING - leftWidth - GAP).filter((segment) => segment.text !== "");
   const percent = parts.context ? contextPercent(parts.context) : 0;
