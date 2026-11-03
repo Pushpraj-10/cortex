@@ -13,7 +13,20 @@ What the user has configured, loaded from disk.
 | `hooks` | accumulate |
 | `mcpServers` | merged by name, project wins |
 
-A missing file is fine. A **malformed file, or a `defaultMode` that is not a permission mode, throws** with the file's path: silently ignoring a file that holds deny rules or hooks would be worse than stopping.
+A missing file is fine. A **malformed file throws** with the file's path, and so does one whose shape is wrong (`hooks` that is not a list of `{ event, command, matcher? }`, an MCP server with no `command`, `args`/`env` of the wrong type, rules that are not strings, a `defaultMode` that is not a permission mode): silently ignoring a file that holds deny rules or hooks would be worse than stopping, and a repository supplies this file.
+
+### A project's settings need trust
+
+The project file is written by whoever wrote the repository, so what it makes Cortex *run or allow* is not applied until the user says so. `readSettingsLayers` reads the two files apart, `projectRequests(project)` picks out what needs trust — **hooks, MCP servers, allow rules, and a default mode looser than `default`** — and `mergeSettings(layers, { trustProject })` leaves those out of an untrusted project. Its **deny rules and a default mode of `plan` or `default` always apply**, since they only make Cortex more careful. `loadSettings(cwd, home?, { trustProject = true })` is both steps for a caller that has already decided.
+
+## Trust (`src/trust.ts`)
+
+The answer to "do you trust this project?" is kept in `~/.cortex/trust.json`: `{ "projects": { "<real path>": { "fingerprint", "trustedAt" } } }`. User level and outside any workspace, so the agent's file tools cannot reach it; written through a new file with an unpredictable name and renamed into place (owner-only `0600`, folder `0700`; not enforced on Windows), and the temporary file is removed if saving fails.
+
+- `fingerprintRequests(requests)` — a SHA-256 of what the project asks for, stable under key order. **Trust is for exactly those requests**: change a hook, add a rule, add a server, and the project is asked about again
+- `isProjectTrusted(cwd, fingerprint, home?)` / `trustProject(cwd, fingerprint, home?)` — a project is keyed by its real location (links followed, lower-cased where the file system ignores case), so another spelling of the same folder is the same project
+- A missing, unreadable or malformed file trusts **nothing** (fail closed, but never blocks startup); at most `MAX_TRUSTED_PROJECTS` (500) answers are kept, the oldest forgotten first
+- To revoke a project, delete its entry (or the file)
 
 ## Memory (`src/memory.ts`)
 
@@ -47,6 +60,6 @@ What goes in is the caller's decision. The CLI saves each message it sends and n
 
 ## Files
 
-`settings.ts` · `memory.ts` · `credentials.ts` · `preferences.ts` · `history.ts`. Depends on `@cortex/policy` and `@cortex/extensions` for types, and on `isPermissionMode` for validation.
+`settings.ts` · `trust.ts` · `memory.ts` · `credentials.ts` · `preferences.ts` · `history.ts`. Depends on `@cortex/policy` and `@cortex/extensions` for types, and on `isPermissionMode` for validation.
 
 Tests: `npm test -w @cortex/config`.

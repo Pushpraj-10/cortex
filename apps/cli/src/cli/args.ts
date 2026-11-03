@@ -1,4 +1,4 @@
-/** Command-line arguments: `cortex [--mode <mode>] [--agent <agent>] [-p <prompt>] [--help]`. */
+/** Command-line arguments: `cortex [--mode <mode>] [--agent <agent>] [-p <prompt>] [--trust-project] [--help]`. */
 import { AGENT_MODE_IDS, isAgentModeId, type AgentModeId } from "@cortex/agent";
 import { CortexError, err, ok, type Result } from "@cortex/core";
 import { PERMISSION_MODES, isPermissionMode, type PermissionMode } from "@cortex/policy";
@@ -10,6 +10,8 @@ export interface CliArgs {
   agent?: AgentModeId;
   /** `-p`: run this one prompt non-interactively, print the answer, and exit. */
   prompt?: string;
+  /** `--trust-project`: honour this project's own hooks, MCP servers and allow rules for this run, without asking or remembering. */
+  trustProject?: boolean;
   help: boolean;
 }
 
@@ -19,6 +21,8 @@ Options:
   --mode <mode>   Permission mode: ${PERMISSION_MODES.join(" | ")}
   --agent <name>  Start as an agent: ${AGENT_MODE_IDS.join(" | ")} (scan and suggest save a report, so add --mode acceptEdits with -p)
   -p <prompt>     Run one prompt non-interactively and print the answer
+  --trust-project Use this project's own hooks, MCP servers and allow rules for this run without asking (a project you have not
+                  trusted has them left out; interactive runs ask once and remember)
   -h, --help      Show this help
 
 Provider: set CORTEX_PROVIDER (ollama | google | anthropic). The default is ollama, which needs OLLAMA_MODEL.`;
@@ -38,6 +42,8 @@ export function parseArgs(argv: string[]): Result<CliArgs> {
 
     if (flag === "-h" || flag === "--help") {
       args.help = true;
+    } else if (flag === "--trust-project") {
+      args.trustProject = true;
     } else if (flag === "--mode" || flag === "--agent" || flag === "-p") {
       const value = argv[i + 1];
       if (value === undefined) return err(new UsageError(`Missing value for ${flag}`));

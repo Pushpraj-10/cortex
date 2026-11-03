@@ -26,6 +26,19 @@ describe("parseArgs", () => {
     expect(!result.ok && result.error.message).toBe('Unknown --agent "hack". Use one of: scan, suggest, fix');
   });
 
+  it("reads --trust-project, which takes no value, alongside the other options", () => {
+    expect(parseArgs(["--trust-project"])).toEqual({ ok: true, value: { help: false, trustProject: true } });
+    expect(parseArgs(["--trust-project", "--mode", "plan", "-p", "go"])).toEqual({
+      ok: true,
+      value: { help: false, trustProject: true, mode: "plan", prompt: "go" },
+    });
+    expect(parseArgs(["-p", "go", "--trust-project"]).ok).toBe(true); // the flag does not swallow, or get swallowed by, a neighbour
+  });
+
+  it("does not trust a project unless asked to", () => {
+    expect(parseArgs(["-p", "go"])).toEqual({ ok: true, value: { help: false, prompt: "go" } });
+  });
+
   it("recognises -h and --help", () => {
     expect(parseArgs(["-h"])).toEqual({ ok: true, value: { help: true } });
     expect(parseArgs(["--help"])).toEqual({ ok: true, value: { help: true } });

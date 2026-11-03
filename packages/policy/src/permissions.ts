@@ -166,11 +166,35 @@ function matchText(pattern: string, value: string, effect: RuleEffect, isPath: b
   return forms.some((form) => (wildcard ? fold(form).startsWith(fold(prefix)) : fold(form) === fold(prefix)));
 }
 
+// ---- Files an edit must always ask about -----------------------------------------
+
+/**
+ * Where editing a file is the same as being able to run commands later: Cortex's own settings (hooks and MCP servers start
+ * from them on the next launch) and git's internals (`.git/hooks/*` run when the user commits). An edit that touches one
+ * asks even in `acceptEdits` and whatever the allow rules say, so "let it edit files" never quietly means "let it plant a
+ * command that runs outside the approval prompt".
+ */
+export const PROTECTED_PATHS: readonly string[] = [".cortex/settings.json", ".git"];
+
+/**
+ * Whether any path the call names is protected, however it is spelled: other letter case, `./`, backslashes, `src/../.git`,
+ * and a Windows short name (`GIT~1` is how NTFS can also spell `.git`).
+ */
+function touchesProtectedPath(input: Record<string, unknown>): boolean {
+  const { values, isPath } = ruleArguments(input);
+  if (!isPath) return false;
+  return values.some((value) => {
+    const normalised = portablePath(value).toLowerCase();
+    return PROTECTED_PATHS.some((protectedPath) => normalised === protectedPath || normalised.startsWith(`${protectedPath}/`)) || normalised.split("/").some((part) => /~\d/.test(part));
+  });
+}
+
 // ---- Decision --------------------------------------------------------------------
 
 /**
- * Order of precedence: deny rules, bypass mode, plan mode, allow rules, reads, acceptEdits, then ask.
- * A deny rule wins over everything, including `bypassPermissions`.
+ * Order of precedence: deny rules, bypass mode, plan mode, protected edits, allow rules, reads, acceptEdits, then ask.
+ * A deny rule wins over everything, including `bypassPermissions`. An edit of a protected path (see `PROTECTED_PATHS`) always
+ * asks, except in `bypassPermissions`, where the user has chosen to ask about nothing.
  */
 export function decidePermission(
   tool: { name: string; kind: ToolKind },
@@ -181,6 +205,7 @@ export function decidePermission(
   if (rules.deny.some((rule) => matchRule(rule, tool.name, input, "deny"))) return "deny";
   if (mode === "bypassPermissions") return "allow";
   if (mode === "plan") return tool.kind === "read" ? "allow" : "deny";
+  if (tool.kind === "edit" && touchesProtectedPath(input)) return "ask";
   if (rules.allow.some((rule) => matchRule(rule, tool.name, input, "allow"))) return "allow";
   if (tool.kind === "read") return "allow";
   if (mode === "acceptEdits" && tool.kind === "edit") return "allow";

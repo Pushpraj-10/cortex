@@ -247,3 +247,72 @@ describe("createToolsExecutor with a policy", () => {
     expect(result).toEqual({ ok: true, value: { result: "read ran", hookNote: "check the output" } });
   });
 });
+
+describe("createToolsExecutor: edits that would plant a command to run later", () => {
+  const ran: unknown[] = [];
+  registerTool({
+    name: "executor-test-protected-write",
+    description: "Pretends to write a file",
+    kind: "edit" as const,
+    parametersSchema: { type: "object" },
+    handler: async (args) => {
+      ran.push(args);
+      return ok({ written: true });
+    },
+  });
+
+  const policy = (askPermission: AgentPolicy["askPermission"]): AgentPolicy => ({
+    mode: "acceptEdits",
+    rules: { allow: ["executor-test-protected-write"], deny: [] },
+    hooks: [],
+    askPermission,
+  });
+
+  it.each([".git/hooks/pre-commit", ".cortex/settings.json", "src/../.git/config", ".GIT/hooks/post-checkout"])(
+    "asks before writing %s even in acceptEdits mode with an allow rule, and writes nothing when the user declines",
+    async (target) => {
+      ran.length = 0;
+      const ask = vi.fn(async () => false);
+      const executor = createToolsExecutor("/workspace", policy(ask));
+
+      const result = await executor.execute("executor-test-protected-write", { path: target, content: "x" });
+
+      expect(ask).toHaveBeenCalledTimes(1);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("TOOL_DECLINED");
+      expect(ran).toEqual([]);
+    },
+  );
+
+  it("writes it when the user approves", async () => {
+    ran.length = 0;
+    const ask = vi.fn(async () => true);
+    const executor = createToolsExecutor("/workspace", policy(ask));
+
+    const result = await executor.execute("executor-test-protected-write", { path: ".git/hooks/pre-commit", content: "x" });
+
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(result.ok).toBe(true);
+    expect(ran).toHaveLength(1);
+  });
+
+  it("refuses without being able to ask, as in a non-interactive run", async () => {
+    ran.length = 0;
+    const executor = createToolsExecutor("/workspace", policy(async () => false));
+    const result = await executor.execute("executor-test-protected-write", { path: ".cortex/settings.json", content: "x" });
+    expect(result.ok).toBe(false);
+    expect(ran).toEqual([]);
+  });
+
+  it("does not ask for an ordinary file, which acceptEdits lets through", async () => {
+    ran.length = 0;
+    const ask = vi.fn(async () => false);
+    const executor = createToolsExecutor("/workspace", policy(ask));
+
+    const result = await executor.execute("executor-test-protected-write", { path: "src/a.ts", content: "x" });
+
+    expect(ask).not.toHaveBeenCalled();
+    expect(result.ok).toBe(true);
+    expect(ran).toHaveLength(1);
+  });
+});

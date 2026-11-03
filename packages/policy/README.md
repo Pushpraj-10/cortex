@@ -11,7 +11,9 @@ What is allowed to happen during an agent turn: **permission modes and rules** d
 | `plan` | allow | deny | deny |
 | `bypassPermissions` | allow | allow | allow |
 
-Precedence: **deny rules** → `bypassPermissions` → `plan` → **allow rules** → reads → `acceptEdits` → ask. A deny rule beats everything, including `bypassPermissions`; `plan` ignores allow rules.
+Precedence: **deny rules** → `bypassPermissions` → `plan` → **protected paths** → **allow rules** → reads → `acceptEdits` → ask. A deny rule beats everything, including `bypassPermissions`; `plan` ignores allow rules.
+
+**Protected paths.** An edit that touches `.cortex/settings.json` or anything in `.git/` (`PROTECTED_PATHS`) always asks: in `default` and `acceptEdits` mode and whatever the allow rules say. Those are where a hook, an MCP server or a git hook would be planted to run later, outside the approval prompt, so "let it edit files" must not quietly mean that. The path is judged however it is written (other letter case, `./`, backslashes, `src/../.git`, and any Windows short name such as `GIT~1`), and either end of a move or copy counts. `plan` still denies, a deny rule still denies, and `bypassPermissions` still allows (the user has chosen to be asked about nothing).
 
 ## Rules
 

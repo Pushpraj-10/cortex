@@ -12,7 +12,7 @@ import {
   type AgentPolicy,
   type AgentSession,
 } from "@cortex/agent";
-import { loadCredentials, loadMemory, loadSettings } from "@cortex/config";
+import { loadCredentials, loadMemory, mergeSettings, projectRequests, readSettingsLayers, type Settings } from "@cortex/config";
 import {
   dependentsProvider,
   mentionedFilesProvider,
@@ -33,6 +33,7 @@ import { builtinTools, registerTool } from "@cortex/tools";
 import { createPermissionBridge, type PermissionBridge } from "./permission-bridge.js";
 import { credentialsToEnv, layerEnv, selectProvider } from "../provider/config.js";
 import { createProviderManager, type ProviderManager } from "../provider/manager.js";
+import { resolveProjectTrust, type ConfirmTrust } from "./trust.js";
 
 export interface BootOptions {
   cwd: string;
@@ -46,6 +47,13 @@ export interface BootOptions {
   env?: NodeJS.ProcessEnv;
   /** Where the user-level `.cortex` folder lives. Defaults to the home directory. */
   home?: string;
+  /** `--trust-project`: honour this project's own hooks, MCP servers and allow rules for this run without asking or remembering. */
+  trustProject?: boolean;
+  /**
+   * Asks the user about a project whose settings want to run or allow commands and that they have not trusted yet. Without it
+   * (a `-p` run, or no terminal) those parts of the settings are left out, with a notice.
+   */
+  confirmTrust?: ConfirmTrust;
 }
 
 export interface Boot {
@@ -74,12 +82,23 @@ async function refuseNonInteractively(toolName: string): Promise<boolean> {
 export async function bootstrap(options: BootOptions): Promise<Result<Boot>> {
   const { cwd } = options;
 
-  let settings: Awaited<ReturnType<typeof loadSettings>>;
+  let settings: Settings;
   let memory: string;
   let skills: Awaited<ReturnType<typeof loadSkills>>;
   let credentials: Awaited<ReturnType<typeof loadCredentials>>;
   try {
-    settings = await loadSettings(cwd, options.home);
+    // A project's own hooks, MCP servers and allow rules only count once the user has trusted it with exactly those.
+    const layers = await readSettingsLayers(cwd, options.home);
+    const trust = await resolveProjectTrust({
+      cwd,
+      home: options.home,
+      requests: projectRequests(layers.project),
+      trustFlag: options.trustProject,
+      confirm: options.interactive ? options.confirmTrust : undefined,
+    });
+    if (trust.quit) return err(new CortexError("Not opening this project: you chose not to trust its settings.", "CLI_TRUST_QUIT"));
+    if (trust.notice) console.error(trust.notice);
+    settings = mergeSettings(layers, { trustProject: trust.trusted });
     memory = await loadMemory(cwd, options.home);
     skills = await loadSkills(cwd, options.home);
     credentials = await loadCredentials(options.home);

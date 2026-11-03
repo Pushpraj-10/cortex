@@ -8,6 +8,7 @@ import { bootstrap } from "./runtime/bootstrap.js";
 import { listWorkspaceFiles } from "./runtime/workspace-files.js";
 import { loadDotEnv } from "./cli/env.js";
 import { runOnce } from "./cli/run-once.js";
+import { askToTrust } from "./cli/trust-prompt.js";
 import { readGitBranch } from "./cli/git-branch.js";
 import { readVersion } from "./cli/version.js";
 import { farewell } from "./cli/farewell.js";
@@ -26,7 +27,16 @@ if (args.value.help) {
 loadDotEnv();
 
 const cwd = process.cwd();
-const boot = await bootstrap({ cwd, mode: args.value.mode, agent: args.value.agent, interactive: args.value.prompt === undefined });
+const interactive = args.value.prompt === undefined;
+const boot = await bootstrap({
+  cwd,
+  mode: args.value.mode,
+  agent: args.value.agent,
+  interactive,
+  trustProject: args.value.trustProject,
+  // Only with a terminal to ask on; without one, a project's own hooks, MCP servers and allow rules are left out.
+  confirmTrust: interactive && process.stdin.isTTY ? (request) => askToTrust(request, { input: process.stdin, output: process.stdout }) : undefined,
+});
 if (!boot.ok) {
   console.error(`Cortex failed to start: ${boot.error.message}`);
   process.exit(1);

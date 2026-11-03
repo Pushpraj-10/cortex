@@ -94,6 +94,7 @@ Messages are remembered between sessions, per project, in `~/.cortex/history/` (
 | `--mode <mode>` | set the permission mode |
 | `--agent <name>` | start as an agent: `scan`, `suggest` or `fix` |
 | `-p <prompt>` | run one prompt without the UI: tool calls go to stderr, the answer to stdout, and anything needing approval is refused unless the mode or a rule allows it |
+| `--trust-project` | use this project's own hooks, MCP servers and allow rules for this run without asking (see [Project trust](#project-trust)) |
 | `-h`, `--help` | show usage |
 
 ### Security agents
@@ -155,6 +156,8 @@ Run `cortex`, type `/provider`, pick a provider and answer its question (the API
 <br>
 
 `.cortex/settings.json` in the project and `~/.cortex/settings.json` for you are merged. A malformed file is an error, not silently ignored.
+
+<a id="project-trust"></a>**Project trust.** A repository can ship its own `.cortex/settings.json`, so opening one must not run its commands. Its **hooks, MCP servers, allow rules and a looser default mode** are left out until you trust the project: Cortex shows what it wants (commands shown with any terminal control characters written out) and asks once before the UI starts. `y` trusts it and remembers the answer in `~/.cortex/trust.json`; enter carries on without those parts; `q` quits. The answer is for **exactly those settings**, so if they change (a `git pull`, an edit) you are asked again. Its **deny rules, and a default mode of `plan` or `default`, always apply**. Your own `~/.cortex/settings.json` is always used. A `-p` run cannot ask: it leaves them out and says so, unless you pass `--trust-project` (for that run only). Separately, the agent **always asks before editing `.cortex/settings.json` or anything in `.git/`**, even in `acceptEdits`, since those are where a hook or a git hook would be planted.
 
 ```json
 {

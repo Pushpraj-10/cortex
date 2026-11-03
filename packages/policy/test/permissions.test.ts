@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decidePermission, isPermissionMode, matchRule, primaryArgument } from "../src/permissions.js";
+import { PROTECTED_PATHS, decidePermission, isPermissionMode, matchRule, primaryArgument } from "../src/permissions.js";
 
 const read = { name: "read_file", kind: "read" as const };
 const edit = { name: "edit_file", kind: "edit" as const };
@@ -271,5 +271,68 @@ describe("matchRule: paths", () => {
     expect(decidePermission(edit, { path: "src/a.ts" }, "default", rules)).toBe("allow");
     expect(decidePermission(edit, { path: "src/../lib/a.ts" }, "default", rules)).toBe("ask");
     expect(decidePermission(edit, { path: "src/../.git/config" }, "bypassPermissions", rules)).toBe("deny");
+  });
+});
+
+// ---- edits that would plant a command to run later -------------------------------------
+
+describe("decidePermission: protected paths", () => {
+  const write = { name: "write_file", kind: "edit" as const };
+  const move = { name: "move_file", kind: "edit" as const };
+
+  it.each([
+    ".cortex/settings.json",
+    "./.cortex/settings.json",
+    ".CORTEX/Settings.JSON",
+    ".cortex\\settings.json",
+    "src/../.cortex/settings.json",
+    ".git/hooks/pre-commit",
+    ".git/config",
+    ".git",
+    ".GIT/config",
+    ".\\.git\\hooks\\post-checkout",
+    "sub/../.git/hooks/pre-push",
+    "GIT~1/hooks/pre-commit",
+    "docs/PROGRA~1/x",
+  ])("asks before an edit of %s, even in acceptEdits mode", (target) => {
+    expect(decidePermission(write, { path: target, content: "x" }, "acceptEdits", none)).toBe("ask");
+    expect(decidePermission(write, { path: target, content: "x" }, "default", none)).toBe("ask");
+  });
+
+  it("asks whatever the allow rules say, so a project's own rule cannot cover it", () => {
+    const rules = { allow: ["write_file", "write_file(*)", "edit_file(.git/*)", "edit_file(.cortex/*)"], deny: [] };
+    expect(decidePermission(write, { path: ".git/hooks/pre-commit" }, "default", rules)).toBe("ask");
+    expect(decidePermission(edit, { path: ".git/config" }, "acceptEdits", rules)).toBe("ask");
+    expect(decidePermission(edit, { path: ".cortex/settings.json" }, "default", rules)).toBe("ask");
+  });
+
+  it("applies to either end of a move or copy", () => {
+    expect(decidePermission(move, { from: "hook.sh", to: ".git/hooks/pre-commit" }, "acceptEdits", none)).toBe("ask");
+    expect(decidePermission(move, { from: ".cortex/settings.json", to: "backup.json" }, "acceptEdits", none)).toBe("ask");
+    expect(decidePermission(move, { from: "a.txt", to: "b.txt" }, "acceptEdits", none)).toBe("allow");
+  });
+
+  it("still lets the other modes and rules do their part: plan denies, a deny rule denies, bypassPermissions allows", () => {
+    expect(decidePermission(write, { path: ".git/config" }, "plan", none)).toBe("deny");
+    expect(decidePermission(write, { path: ".git/config" }, "default", { allow: [], deny: ["write_file(.git/*)"] })).toBe("deny");
+    expect(decidePermission(write, { path: ".git/config" }, "bypassPermissions", none)).toBe("allow");
+    expect(decidePermission(write, { path: ".git/config" }, "bypassPermissions", { allow: [], deny: ["write_file(.git/*)"] })).toBe("deny");
+  });
+
+  it("leaves ordinary edits to the mode, as before", () => {
+    for (const target of [".gitignore", ".gitattributes", "src/git/a.ts", ".cortex/skills/x/SKILL.md", ".cortex/security/scan.md", "my.git/x", "gitx/y", "docs/tilde~notes.md", "src/a.ts"]) {
+      expect(decidePermission(write, { path: target }, "acceptEdits", none), target).toBe("allow");
+      expect(decidePermission(write, { path: target }, "default", none), target).toBe("ask");
+    }
+  });
+
+  it("does not stop reads of those places, or a call that names no path", () => {
+    expect(decidePermission(read, { path: ".git/config" }, "default", none)).toBe("allow");
+    expect(decidePermission(read, { path: ".cortex/settings.json" }, "default", none)).toBe("allow");
+    expect(decidePermission({ name: "save_security_report", kind: "edit" }, { stage: "scan", content: "x" }, "acceptEdits", none)).toBe("allow");
+  });
+
+  it("exports the protected paths, so the approval prompt and the docs can name them", () => {
+    expect(PROTECTED_PATHS).toEqual([".cortex/settings.json", ".git"]);
   });
 });
