@@ -24,7 +24,9 @@ const reply = await provider.chat({ messages, tools, signal });   // Result<Chat
 | `src/google.ts` | Google Gemini (cloud) | native `generateContent`; system prompt is `systemInstruction`; assistant role is `model`; calls and results are `functionCall` / `functionResponse` parts matched by tool name (no ids); results must be objects; schema keywords Gemini rejects are stripped |
 | `src/anthropic.ts` | Anthropic (cloud) | Messages API; system prompt is a top-level field; tool calls are content blocks; adjacent user turns are merged |
 
-`ChatMessage` carries no tool-call id. Anthropic derives `call_<toolName>` (safe because the agent runs one tool call per turn) and also sends `disable_parallel_tool_use`; Google needs no ids. Both return only the first tool call. `src/wire.ts` holds what the HTTP providers share: `ProviderRequestError` (code `LLM_<PROVIDER>_REQUEST_FAILED`) and `postJson`.
+`ChatMessage` carries no tool-call id. Anthropic derives `call_<toolName>` (safe because the agent runs one tool call per turn) and also sends `disable_parallel_tool_use`; Google needs no ids. Both return only the first tool call. `src/wire.ts` holds what the HTTP providers share: `ProviderRequestError` (code `LLM_<PROVIDER>_REQUEST_FAILED`), `postJson`, `postStream` and `getJson`.
+
+**Where a request may go** (`checkRequestUrl`, applied to every request before anything is sent). A request that carries an API key (`secure: true`, which Google and Anthropic always set) must be `https://`, or plain `http://` to `localhost`, `127.x.x.x` or `[::1]` only (a name merely ending in `.localhost` is not trusted, since DNS decides what it means), and is made with `redirect: "error"`, because `fetch` drops only the standard `Authorization` header on a cross-origin redirect and an `x-api-key` or `x-goog-api-key` would go with it. Every request is refused if its URL is not `http(s)` or has a username or password in it. The errors name the host at most, never the path or query, so a credential written into a URL cannot reach a log through them. Ollama sends no key, so it may use plain `http://` and follows redirects.
 
 ## Adding a provider
 

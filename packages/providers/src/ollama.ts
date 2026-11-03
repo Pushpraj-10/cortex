@@ -12,7 +12,7 @@ export interface OllamaConfig {
   model: string;
 }
 
-const DEFAULT_BASE_URL = "http://localhost:11434";
+export const DEFAULT_BASE_URL = "http://localhost:11434";
 
 // ---- wire format -----------------------------------------------------------------
 

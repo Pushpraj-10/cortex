@@ -18,6 +18,11 @@ export type {
 export { UnknownProviderError, getLlmProvider, registerLlmProvider } from "./registry.js";
 export { ProviderRequestError } from "./wire.js";
 
-export { anthropicProviderDescriptor, createAnthropicClient, type AnthropicConfig } from "./anthropic.js";
-export { createGoogleClient, googleProviderDescriptor, type GoogleConfig } from "./google.js";
-export { createOllamaClient, ollamaProviderDescriptor, type OllamaConfig } from "./ollama.js";
+export {
+  DEFAULT_BASE_URL as DEFAULT_ANTHROPIC_BASE_URL,
+  anthropicProviderDescriptor,
+  createAnthropicClient,
+  type AnthropicConfig,
+} from "./anthropic.js";
+export { DEFAULT_BASE_URL as DEFAULT_GOOGLE_BASE_URL, createGoogleClient, googleProviderDescriptor, type GoogleConfig } from "./google.js";
+export { DEFAULT_BASE_URL as DEFAULT_OLLAMA_BASE_URL, createOllamaClient, ollamaProviderDescriptor, type OllamaConfig } from "./ollama.js";

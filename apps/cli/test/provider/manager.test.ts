@@ -74,7 +74,7 @@ describe("createProviderManager", () => {
   });
 
   describe("configure", () => {
-    const google = { apiKey: SECRET, model: "gemini-test", baseUrl: "http://google.test" };
+    const google = { apiKey: SECRET, model: "gemini-test", baseUrl: "https://google.test" };
 
     it("saves the settings, makes the provider the default, and switches the running client to it", async () => {
       const manager = createProviderManager({ env: {}, home, initial: ollama() });
@@ -93,7 +93,7 @@ describe("createProviderManager", () => {
       const reply = await manager.llm.chat(request);
       expect(reply.ok && reply.value.content).toBe("google reply");
       const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-      expect(url).toBe("http://google.test/v1beta/models/gemini-test:generateContent");
+      expect(url).toBe("https://google.test/v1beta/models/gemini-test:generateContent");
       expect((init.headers as Record<string, string>)["x-goog-api-key"]).toBe(SECRET);
     });
 
@@ -314,12 +314,12 @@ describe("createProviderManager.listModels", () => {
   it("falls back to the saved key and server URL, then the environment's, when none was typed", async () => {
     fetchMock.mockResolvedValue(googleModels());
     await saveProviderCredentials("google", { apiKey: "saved-key" }, { home });
-    const manager = createProviderManager({ env: { GOOGLE_BASE_URL: "http://proxy.test" }, home });
+    const manager = createProviderManager({ env: { GOOGLE_BASE_URL: "https://proxy.test" }, home });
 
     await manager.listModels("google", {});
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("http://proxy.test/v1beta/models?pageSize=1000");
+    expect(url).toBe("https://proxy.test/v1beta/models?pageSize=1000");
     expect(init.headers).toEqual({ "x-goog-api-key": "saved-key" });
   });
 

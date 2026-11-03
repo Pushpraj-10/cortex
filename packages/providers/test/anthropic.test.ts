@@ -108,13 +108,13 @@ describe("createAnthropicClient", () => {
   it("posts to /v1/messages with the api key and version headers and returns the reply", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ content: [{ type: "text", text: "hello" }] }));
     vi.stubGlobal("fetch", fetchMock);
-    const client = createAnthropicClient({ apiKey: "secret", model: "m", baseUrl: "http://example.test" });
+    const client = createAnthropicClient({ apiKey: "secret", model: "m", baseUrl: "https://example.test" });
 
     const result = await client.chat({ messages: [{ role: "user", content: "hi" }] });
 
     expect(result).toEqual({ ok: true, value: { role: "assistant", content: "hello" } });
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("http://example.test/v1/messages");
+    expect(url).toBe("https://example.test/v1/messages");
     const headers = init.headers as Record<string, string>;
     expect(headers["x-api-key"]).toBe("secret");
     expect(headers["anthropic-version"]).toBe("2023-06-01");
@@ -223,9 +223,9 @@ describe("createAnthropicClient chatStream", () => {
   it("asks for a stream with the same body as a normal request, and the key and version in headers", async () => {
     const fetchMock = vi.fn().mockResolvedValue(streamResponse([start + textBlock(0, "x") + stop]));
     vi.stubGlobal("fetch", fetchMock);
-    await collect(createAnthropicClient({ ...config, baseUrl: "http://example.test" }).chatStream!(request));
+    await collect(createAnthropicClient({ ...config, baseUrl: "https://example.test" }).chatStream!(request));
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("http://example.test/v1/messages");
+    expect(url).toBe("https://example.test/v1/messages");
     expect(init.headers).toMatchObject({ "x-api-key": "key-1", "anthropic-version": "2023-06-01" });
     expect(JSON.parse(init.body as string)).toEqual(JSON.parse(JSON.stringify({ ...buildAnthropicRequest(config, request), stream: true })));
   });
@@ -307,10 +307,10 @@ describe("listAnthropicModels", () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: [{ id: "bare" }, { display_name: "no id" }] }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await listAnthropicModels({ apiKey: "k", baseUrl: "http://proxy.test" });
+    const result = await listAnthropicModels({ apiKey: "k", baseUrl: "https://proxy.test" });
 
     expect(result).toEqual({ ok: true, value: [{ id: "bare" }] });
-    expect(fetchMock.mock.calls[0]![0]).toBe("http://proxy.test/v1/models?limit=1000");
+    expect(fetchMock.mock.calls[0]![0]).toBe("https://proxy.test/v1/models?limit=1000");
   });
 
   it("follows pages until the API says there are no more", async () => {
@@ -359,5 +359,62 @@ describe("listAnthropicModels", () => {
 
   it("is what the descriptor lists models with", () => {
     expect(anthropicProviderDescriptor.listModels).toBe(listAnthropicModels);
+  });
+});
+
+describe("Anthropic: where the key may go", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const request = { messages: [{ role: "user" as const, content: "hi" }] };
+  const reply = () => jsonResponse({ content: [{ type: "text", text: "hello" }] });
+
+  it("never sends the key over plain http to another machine, for a chat, a stream or a model list", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => reply());
+    vi.stubGlobal("fetch", fetchMock);
+    const baseUrl = "http://gateway.example:8080";
+    const client = createAnthropicClient({ apiKey: "sk-ant-SECRET", model: "m", baseUrl });
+
+    const chat = await client.chat(request);
+    const events = await collect(client.chatStream!(request));
+    const listed = await listAnthropicModels({ apiKey: "sk-ant-SECRET", baseUrl });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(!chat.ok && chat.error.message).toContain("Anthropic would send its API key to gateway.example over plain http");
+    expect(events).toEqual([{ type: "error", error: expect.objectContaining({ message: expect.stringContaining("over plain http") }) }]);
+    expect(!listed.ok && listed.error.message).toContain("over plain http");
+    for (const message of [!chat.ok && chat.error.message, !listed.ok && listed.error.message]) expect(message).not.toContain("sk-ant-SECRET");
+  });
+
+  it("still works over plain http to this machine, for a local gateway", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => reply());
+    vi.stubGlobal("fetch", fetchMock);
+
+    const chat = await createAnthropicClient({ apiKey: "k", model: "m", baseUrl: "http://localhost:4000" }).chat(request);
+
+    expect(chat.ok && chat.value.content).toBe("hello");
+    expect(fetchMock.mock.calls[0]![0]).toBe("http://localhost:4000/v1/messages");
+  });
+
+  it("does not follow a redirect with the key attached, and says so", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(Object.assign(new TypeError("fetch failed"), { cause: new Error("unexpected redirect") }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const chat = await createAnthropicClient({ apiKey: "k", model: "m" }).chat(request);
+
+    expect((fetchMock.mock.calls[0]![1] as RequestInit).redirect).toBe("error");
+    expect(!chat.ok && chat.error.message).toContain("redirected the request; it is not followed");
+  });
+
+  it("refuses a server URL with a username or password in it, without repeating them", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const chat = await createAnthropicClient({ apiKey: "k", model: "m", baseUrl: "https://alice:hunter2@api.example.com" }).chat(request);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(!chat.ok && chat.error.message).toContain("username or password");
+    expect(!chat.ok && chat.error.message).not.toContain("hunter2");
   });
 });

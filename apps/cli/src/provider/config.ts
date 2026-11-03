@@ -8,7 +8,14 @@
  */
 import type { Credentials } from "@cortex/config";
 import { CortexError, ok, err, type Result } from "@cortex/core";
-import type { AnthropicConfig, GoogleConfig, OllamaConfig } from "@cortex/providers";
+import {
+  DEFAULT_ANTHROPIC_BASE_URL,
+  DEFAULT_GOOGLE_BASE_URL,
+  DEFAULT_OLLAMA_BASE_URL,
+  type AnthropicConfig,
+  type GoogleConfig,
+  type OllamaConfig,
+} from "@cortex/providers";
 
 // ---- Ollama ----------------------------------------------------------------------
 
@@ -124,6 +131,13 @@ export const PROVIDER_ENV: Record<ProviderId, { apiKey?: string; model: string; 
   ollama: { model: "OLLAMA_MODEL", baseUrl: "OLLAMA_BASE_URL" },
   google: { apiKey: "GOOGLE_API_KEY", model: "GOOGLE_MODEL", baseUrl: "GOOGLE_BASE_URL" },
   anthropic: { apiKey: "ANTHROPIC_API_KEY", model: "ANTHROPIC_MODEL", baseUrl: "ANTHROPIC_BASE_URL" },
+};
+
+/** Where each provider's API is when no server URL is given. */
+export const DEFAULT_BASE_URLS: Record<ProviderId, string> = {
+  ollama: DEFAULT_OLLAMA_BASE_URL,
+  google: DEFAULT_GOOGLE_BASE_URL,
+  anthropic: DEFAULT_ANTHROPIC_BASE_URL,
 };
 
 /** Saved provider settings (and the saved default provider) as the environment variables the resolvers read. */

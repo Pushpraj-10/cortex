@@ -20,7 +20,7 @@ export interface AnthropicConfig {
   maxTokens?: number;
 }
 
-const DEFAULT_BASE_URL = "https://api.anthropic.com";
+export const DEFAULT_BASE_URL = "https://api.anthropic.com";
 const API_VERSION = "2023-06-01";
 const DEFAULT_MAX_TOKENS = 8192;
 
@@ -148,7 +148,7 @@ export function createAnthropicClient(config: AnthropicConfig): LLMProvider {
         provider: "Anthropic",
         baseUrl,
         url: `${baseUrl}/v1/messages`,
-        headers: { "x-api-key": config.apiKey, "anthropic-version": API_VERSION },
+        headers: { "x-api-key": config.apiKey, "anthropic-version": API_VERSION }, secure: true,
         body: buildAnthropicRequest(config, request),
         signal: request.signal,
       });
@@ -168,7 +168,7 @@ export function createAnthropicClient(config: AnthropicConfig): LLMProvider {
         provider: "Anthropic",
         baseUrl,
         url: `${baseUrl}/v1/messages`,
-        headers: { "x-api-key": config.apiKey, "anthropic-version": API_VERSION },
+        headers: { "x-api-key": config.apiKey, "anthropic-version": API_VERSION }, secure: true,
         body: { ...buildAnthropicRequest(config, request), stream: true },
         signal: request.signal,
       });
@@ -270,7 +270,7 @@ export async function listAnthropicModels(config: Omit<AnthropicConfig, "model">
       provider: "Anthropic",
       baseUrl,
       url: `${baseUrl}/v1/models?${query}`,
-      headers: { "x-api-key": config.apiKey, "anthropic-version": API_VERSION },
+      headers: { "x-api-key": config.apiKey, "anthropic-version": API_VERSION }, secure: true,
       signal,
     });
     if (!reply.ok) return reply;

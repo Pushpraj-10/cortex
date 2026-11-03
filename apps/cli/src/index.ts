@@ -24,7 +24,13 @@ if (args.value.help) {
   process.exit(0);
 }
 
-loadDotEnv();
+const refusedFromDotEnv = loadDotEnv();
+if (refusedFromDotEnv.length > 0) {
+  console.error(
+    `Ignored ${refusedFromDotEnv.join(", ")} from .env: a project's .env can set Cortex's provider, models and API keys, but not server URLs. ` +
+      `Set those in your shell, or use /provider.`,
+  );
+}
 
 const cwd = process.cwd();
 const interactive = args.value.prompt === undefined;

@@ -19,7 +19,7 @@ export interface GoogleConfig {
   model: string;
 }
 
-const DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com";
+export const DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com";
 
 // ---- wire format -----------------------------------------------------------------
 
@@ -169,7 +169,7 @@ export function createGoogleClient(config: GoogleConfig): LLMProvider {
         provider: "Google",
         baseUrl,
         url: `${baseUrl}/v1beta/models/${model}:generateContent`,
-        headers: { "x-goog-api-key": config.apiKey },
+        headers: { "x-goog-api-key": config.apiKey }, secure: true,
         body: buildGoogleRequest(request),
         signal: request.signal,
       });
@@ -197,7 +197,7 @@ export function createGoogleClient(config: GoogleConfig): LLMProvider {
         provider: "Google",
         baseUrl,
         url: `${baseUrl}/v1beta/models/${model}:streamGenerateContent?alt=sse`,
-        headers: { "x-goog-api-key": config.apiKey },
+        headers: { "x-goog-api-key": config.apiKey }, secure: true,
         body: buildGoogleRequest(request),
         signal: request.signal,
       });
@@ -283,7 +283,7 @@ export async function listGoogleModels(config: Omit<GoogleConfig, "model">, sign
       provider: "Google",
       baseUrl,
       url: `${baseUrl}/v1beta/models?${query}`,
-      headers: { "x-goog-api-key": config.apiKey },
+      headers: { "x-goog-api-key": config.apiKey }, secure: true,
       signal,
     });
     if (!reply.ok) return reply;

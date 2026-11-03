@@ -136,6 +136,8 @@ Deny rules always win, even in `bypassPermissions`.
 
 **Provider.** `CORTEX_PROVIDER` picks `ollama`, `google` or `anthropic`; if it is unset, Ollama is used. Each provider needs its model variable (`OLLAMA_MODEL`, `GOOGLE_MODEL`, `ANTHROPIC_MODEL`) and, for the cloud ones, a key (`GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`). See [`.env.example`](.env.example).
 
+**Where your key can go.** A provider's server URL (`OLLAMA_BASE_URL`, `GOOGLE_BASE_URL`, `ANTHROPIC_BASE_URL`) is set in your shell, never in a project's `.env`: the `.env` in the folder you open belongs to whoever wrote the project, so Cortex reads **only the provider, model and API-key variables** from it (and tells you if it skipped a URL or another Cortex variable). Anything else in it, such as `NODE_OPTIONS` or `PATH`, is ignored too, since every command, hook and MCP server Cortex starts would inherit it. A request that carries an API key must go over **`https://`** (plain `http://` is allowed only to `localhost`, `127.x.x.x` and `[::1]`, for a local gateway), is **never redirected** (a redirect would carry the key header to another site), and a server URL with a username or password in it is refused. Ollama has no key, so it may be plain `http://` on your network.
+
 <details>
 <summary><b>Setting up a provider from the app</b> (no environment files needed)</summary>
 

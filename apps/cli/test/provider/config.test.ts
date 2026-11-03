@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_BASE_URLS,
   InvalidProviderError,
   MissingAnthropicApiKeyError,
   MissingAnthropicModelError,
@@ -207,5 +208,22 @@ describe("layerEnv", () => {
     const env = layerEnv({ CORTEX_PROVIDER: "google" }, { CORTEX_PROVIDER: "ollama", OLLAMA_MODEL: "llama3.1" });
     const result = selectProvider(env);
     expect(result.ok && result.value.id).toBe("ollama");
+  });
+});
+
+describe("DEFAULT_BASE_URLS", () => {
+  it("has a usual address for every provider, each a plain http(s) URL with nothing in it to repeat", () => {
+    expect(Object.keys(DEFAULT_BASE_URLS).sort()).toEqual([...PROVIDER_IDS].sort());
+    for (const id of PROVIDER_IDS) {
+      const url = new URL(DEFAULT_BASE_URLS[id]);
+      expect(["http:", "https:"]).toContain(url.protocol);
+      expect(url.username + url.password + url.search).toBe("");
+    }
+  });
+
+  it("is https for the cloud providers, which carry a key, and local for Ollama", () => {
+    expect(DEFAULT_BASE_URLS.google.startsWith("https://")).toBe(true);
+    expect(DEFAULT_BASE_URLS.anthropic.startsWith("https://")).toBe(true);
+    expect(DEFAULT_BASE_URLS.ollama).toBe("http://localhost:11434");
   });
 });

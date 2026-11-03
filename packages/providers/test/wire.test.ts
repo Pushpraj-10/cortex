@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ProviderRequestError, getJson, postJson, postStream, readLines, readSseData, streamInterrupted } from "../src/wire.js";
+import { ProviderRequestError, checkRequestUrl, getJson, postJson, postStream, readLines, readSseData, streamInterrupted } from "../src/wire.js";
 import { collect, dribble, streamResponse } from "./support/stream-response.js";
 
 describe("ProviderRequestError", () => {
@@ -257,5 +257,136 @@ describe("streamInterrupted", () => {
   it("keeps the original error as the cause", () => {
     const cause = new Error("root");
     expect(streamInterrupted("Test", cause).cause).toBe(cause);
+  });
+});
+
+describe("checkRequestUrl", () => {
+  const check = (url: string, secure = true) => checkRequestUrl("Test", url, secure);
+
+  it("allows https for a request that carries a key", () => {
+    expect(check("https://api.example.com/v1/messages")).toBeUndefined();
+    expect(check("https://api.example.com:8443/v1")).toBeUndefined();
+  });
+
+  it.each(["http://localhost:11434/x", "http://localhost", "http://127.0.0.1:8080/v1", "http://127.1.2.3/x", "http://[::1]:3000/x"])(
+    "allows plain http to this machine, even with a key: %s",
+    (url) => {
+      expect(check(url)).toBeUndefined();
+    },
+  );
+
+  it.each([
+    "http://api.example.com/v1",
+    "http://10.0.0.5/x",
+    "http://192.168.1.2:8000",
+    "http://gpu-box:11434",
+    "http://localhost.evil.example/x",
+    "http://127.0.0.1.evil.example/x",
+    "http://app.localhost/x",
+  ])("refuses plain http anywhere else when a key goes with it: %s", (url) => {
+    const refused = check(url);
+    expect(refused).toBeInstanceOf(ProviderRequestError);
+    expect(refused?.message).toContain("over plain http");
+    expect(refused?.message).toContain("https://");
+    expect(refused?.message).toContain(new URL(url).hostname);
+  });
+
+  it("allows plain http anywhere when no key goes with the request", () => {
+    expect(check("http://gpu-box:11434", false)).toBeUndefined();
+    expect(check("http://192.168.1.2:8000/api", false)).toBeUndefined();
+  });
+
+  it.each(["ftp://example.com/x", "file:///etc/passwd", "javascript:alert(1)", "ws://example.com/x", "data:text/plain,hi"])(
+    "refuses a scheme that is not http or https: %s",
+    (url) => {
+      expect(check(url, false)?.message).toContain("must start with http:// or https://");
+    },
+  );
+
+  it.each(["not a url", "", "://nohost", "http://"])("refuses something that is not a URL: %j", (url) => {
+    expect(check(url, false)?.message).toContain("not a valid URL");
+  });
+
+  it("refuses a username or password in the URL, with or without a key, and does not repeat them", () => {
+    for (const secure of [true, false]) {
+      const refused = check("https://alice:hunter2@api.example.com/v1", secure);
+      expect(refused?.message).toContain("contains a username or password");
+      expect(refused?.message).not.toContain("hunter2");
+      expect(refused?.message).not.toContain("alice");
+    }
+    expect(check("https://alice@api.example.com/v1", false)?.message).toContain("username or password");
+  });
+
+  it("never repeats the path or the query, which can hold a credential", () => {
+    const refused = check("http://evil.example/secret-path?token=abc123");
+    expect(refused?.message).not.toContain("secret-path");
+    expect(refused?.message).not.toContain("abc123");
+    expect(refused?.message).toContain("evil.example");
+  });
+});
+
+describe("requests that carry a key", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const base = { provider: "Test", baseUrl: "http://remote.example", url: "http://remote.example/x" };
+
+  it("are refused before anything is sent when the URL is plain http to another machine, by all three kinds of request", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const posted = await postJson({ ...base, body: {}, headers: { "x-api-key": "SECRET" }, secure: true });
+    const got = await getJson({ ...base, headers: { "x-api-key": "SECRET" }, secure: true });
+    const streamed = await postStream({ ...base, body: {}, headers: { "x-api-key": "SECRET" }, secure: true });
+
+    for (const result of [posted, got, streamed]) {
+      expect(result.ok).toBe(false);
+      expect(!result.ok && result.error.message).toContain("over plain http");
+      expect(!result.ok && result.error.message).not.toContain("SECRET");
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("go to https and to localhost as asked", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response("{}"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect((await postJson({ ...base, url: "https://remote.example/x", body: {}, secure: true })).ok).toBe(true);
+    expect((await getJson({ ...base, url: "http://localhost:8080/x", secure: true })).ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("are told not to follow a redirect, which would carry the key header to another site; other requests are left as before", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response("{}"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await postJson({ ...base, url: "https://remote.example/x", body: {}, secure: true });
+    await getJson({ ...base, url: "https://remote.example/x", secure: true });
+    await postJson({ ...base, url: "http://remote.example/x", body: {} });
+    await getJson({ ...base, url: "http://remote.example/x" });
+
+    const redirects = fetchMock.mock.calls.map((call) => (call[1] as RequestInit).redirect);
+    expect(redirects).toEqual(["error", "error", undefined, undefined]);
+  });
+
+  it("say that a redirect was refused, rather than blaming the network", async () => {
+    const redirected = Object.assign(new TypeError("fetch failed"), { cause: new Error("unexpected redirect") });
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(redirected));
+
+    const secure = await getJson({ ...base, url: "https://remote.example/x", baseUrl: "https://remote.example", secure: true });
+    expect(!secure.ok && secure.error.message).toBe("Test at https://remote.example redirected the request; it is not followed, since the API key would go with it");
+
+    const plain = await getJson({ ...base, url: "http://remote.example/x" });
+    expect(!plain.ok && plain.error.message).toBe("Failed to reach Test at http://remote.example");
+  });
+
+  it("refuse a URL with credentials in it even when no key goes along, without calling out", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await postJson({ ...base, url: "http://alice:hunter2@remote.example/x", body: {} });
+    expect(!result.ok && result.error.message).toContain("username or password");
+    expect(!result.ok && result.error.message).not.toContain("hunter2");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

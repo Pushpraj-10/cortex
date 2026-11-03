@@ -458,3 +458,44 @@ describe("listOllamaModels", () => {
     expect(ollamaProviderDescriptor.listModels).toBe(listOllamaModels);
   });
 });
+
+describe("Ollama: server URLs", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const request = { messages: [{ role: "user" as const, content: "hi" }] };
+
+  it("may be plain http on the network, since no key goes with the request", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => jsonResponse({ message: { content: "hello" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const chat = await createOllamaClient({ model: "m", baseUrl: "http://gpu-box:11434" }).chat(request);
+
+    expect(chat.ok && chat.value.content).toBe("hello");
+    expect(fetchMock.mock.calls[0]![0]).toBe("http://gpu-box:11434/api/chat");
+    expect((fetchMock.mock.calls[0]![1] as RequestInit).redirect).toBeUndefined(); // a reverse proxy may redirect, and nothing secret goes along
+  });
+
+  it("must not carry a username or password, which are refused without being repeated", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const chat = await createOllamaClient({ model: "m", baseUrl: "http://alice:hunter2@gpu-box:11434" }).chat(request);
+    const listed = await listOllamaModels({ baseUrl: "http://alice:hunter2@gpu-box:11434" });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    for (const result of [chat, listed]) {
+      expect(!result.ok && result.error.message).toContain("username or password");
+      expect(!result.ok && result.error.message).not.toContain("hunter2");
+    }
+  });
+
+  it("must be an http or https URL", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const chat = await createOllamaClient({ model: "m", baseUrl: "file:///etc" }).chat(request);
+    expect(!chat.ok && chat.error.message).toContain("must start with http:// or https://");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

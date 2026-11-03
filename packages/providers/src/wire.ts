@@ -16,6 +16,51 @@ export class ProviderRequestError extends CortexError {
   }
 }
 
+// ---- Where a request may go ------------------------------------------------------
+
+/**
+ * Hosts a key may travel to over plain http, because the traffic never leaves this machine: the literal `localhost`, a
+ * 127.x.x.x address, or `[::1]`. A name that merely ends in `.localhost` is not trusted, since what it means is up to DNS.
+ */
+const isLoopbackHost = (host: string): boolean => host === "localhost" || /^127(?:\.\d{1,3}){3}$/.test(host) || host === "[::1]";
+
+/**
+ * Whether a request may be sent to `url`, or why not. A request that carries a credential (`secure`) must go over https, or
+ * plain http to this machine only: the key would otherwise cross the network readable. Any request is refused if the URL
+ * is not http(s) or has a username or password in it. The messages name the host at most, never the rest of the URL, so a
+ * credential written into one cannot reach a log or the transcript through them.
+ */
+export function checkRequestUrl(provider: string, url: string, secure: boolean): ProviderRequestError | undefined {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return new ProviderRequestError(provider, `The ${provider} server URL is not a valid URL`);
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return new ProviderRequestError(provider, `The ${provider} server URL must start with http:// or https://`);
+  }
+  if (parsed.username !== "" || parsed.password !== "") {
+    return new ProviderRequestError(provider, `The ${provider} server URL contains a username or password. Remove it; a key goes in the API key setting`);
+  }
+  if (secure && parsed.protocol === "http:" && !isLoopbackHost(parsed.hostname)) {
+    return new ProviderRequestError(
+      provider,
+      `${provider} would send its API key to ${parsed.hostname} over plain http. Use an https:// URL (plain http is only allowed for localhost)`,
+    );
+  }
+  return undefined;
+}
+
+/** What fetch's failure means when it was told to refuse redirects: said plainly, since "fetch failed" would blame the network. */
+function describeFetchFailure(opts: { provider: string; baseUrl: string; secure?: boolean }, error: unknown): ProviderRequestError {
+  const reason = error instanceof Error ? `${error.message} ${error.cause instanceof Error ? error.cause.message : ""}` : String(error);
+  if (opts.secure && /redirect/i.test(reason)) {
+    return new ProviderRequestError(opts.provider, `${opts.provider} at ${opts.baseUrl} redirected the request; it is not followed, since the API key would go with it`, error);
+  }
+  return new ProviderRequestError(opts.provider, `Failed to reach ${opts.provider} at ${opts.baseUrl}`, error);
+}
+
 export interface PostJsonOptions {
   /** Display name used in error messages, e.g. "Ollama". */
   provider: string;
@@ -24,10 +69,15 @@ export interface PostJsonOptions {
   headers?: Record<string, string>;
   body: unknown;
   signal?: AbortSignal;
+  /** The request carries an API key: it must go over https (or to localhost), and a redirect is refused rather than followed. */
+  secure?: boolean;
 }
 
 /** POSTs a JSON body and returns the response once the status is known to be 2xx; every failure mode is a Result. */
 async function post(opts: PostJsonOptions): Promise<Result<Response>> {
+  const refused = checkRequestUrl(opts.provider, opts.url, opts.secure === true);
+  if (refused) return err(refused);
+
   let response: Response;
   try {
     response = await fetch(opts.url, {
@@ -35,9 +85,11 @@ async function post(opts: PostJsonOptions): Promise<Result<Response>> {
       headers: { "content-type": "application/json", ...opts.headers },
       body: JSON.stringify(opts.body),
       signal: opts.signal,
+      // fetch only drops the standard Authorization header when it follows a redirect to another site; an x-api-key would go along.
+      ...(opts.secure ? { redirect: "error" as const } : {}),
     });
   } catch (error) {
-    return err(new ProviderRequestError(opts.provider, `Failed to reach ${opts.provider} at ${opts.baseUrl}`, error));
+    return err(describeFetchFailure(opts, error));
   }
 
   if (!response.ok) {
@@ -62,6 +114,8 @@ export interface GetJsonOptions {
   signal?: AbortSignal;
   /** Gives up after this long, so a server that never answers cannot hold a menu open. Defaults to 10 seconds. */
   timeoutMs?: number;
+  /** The request carries an API key: it must go over https (or to localhost), and a redirect is refused rather than followed. */
+  secure?: boolean;
 }
 
 const DEFAULT_GET_TIMEOUT_MS = 10_000;
@@ -71,17 +125,20 @@ const DEFAULT_GET_TIMEOUT_MS = 10_000;
  * appear in an error, so an API key sent in a header cannot leak through one; a non-2xx reply is reported with its status and body.
  */
 export async function getJson<T>(opts: GetJsonOptions): Promise<Result<T>> {
+  const refused = checkRequestUrl(opts.provider, opts.url, opts.secure === true);
+  if (refused) return err(refused);
+
   const timeout = AbortSignal.timeout(opts.timeoutMs ?? DEFAULT_GET_TIMEOUT_MS);
   const signal = opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
 
   let response: Response;
   try {
-    response = await fetch(opts.url, { method: "GET", headers: opts.headers, signal });
+    response = await fetch(opts.url, { method: "GET", headers: opts.headers, signal, ...(opts.secure ? { redirect: "error" as const } : {}) });
   } catch (error) {
     if (timeout.aborted && !opts.signal?.aborted) {
       return err(new ProviderRequestError(opts.provider, `${opts.provider} at ${opts.baseUrl} did not answer in time`, error));
     }
-    return err(new ProviderRequestError(opts.provider, `Failed to reach ${opts.provider} at ${opts.baseUrl}`, error));
+    return err(describeFetchFailure(opts, error));
   }
 
   if (!response.ok) {

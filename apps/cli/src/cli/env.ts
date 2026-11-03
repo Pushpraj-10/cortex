@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { DEFAULT_BASE_URLS, PROVIDER_ENV, PROVIDER_IDS } from "../provider/config.js";
 
 // ---- parse-dot-env ----
 
@@ -32,20 +33,48 @@ export function parseDotEnv(source: string): Record<string, string> {
 // ---- load-dot-env ----
 
 /**
- * Loads a .env file (default: `.env` in the current working directory) into
- * `process.env`, without overwriting variables the shell already exported — a real
- * exported env var always wins over the file. The file is optional; a missing one is
- * silently ignored.
+ * The variables a project's `.env` may set: Cortex's own provider settings (which provider, and each one's model and API
+ * key) and nothing else. The `.env` in the working directory belongs to whoever wrote the project, and what it sets is
+ * inherited by every command, hook and MCP server Cortex starts, so letting it set `NODE_OPTIONS`, `PATH` or `BASH_ENV`
+ * would run its code, and letting it set a provider's server URL would send your saved API key to a server of its choosing.
+ * Server URLs are set in the shell, or (for Ollama) with /provider.
  */
-export function loadDotEnv(filePath: string = path.resolve(process.cwd(), ".env")): void {
+export const PROJECT_ENV_ALLOWED: ReadonlySet<string> = new Set([
+  "CORTEX_PROVIDER",
+  ...PROVIDER_IDS.flatMap((id) => [PROVIDER_ENV[id].apiKey, PROVIDER_ENV[id].model].filter((name): name is string => name !== undefined)),
+]);
+
+/** A name that looks like it was meant for Cortex or one of its providers, so a refusal is worth telling the user about. */
+const CORTEX_FLAVOURED = /^(?:CORTEX|OLLAMA|GOOGLE|ANTHROPIC)_/;
+
+/** A provider's server URL variable set to that provider's usual address changes nothing, so refusing it needs no mention (it is what `.env.example` has). */
+function isDefaultBaseUrl(key: string, value: string): boolean {
+  const id = PROVIDER_IDS.find((candidate) => PROVIDER_ENV[candidate].baseUrl === key);
+  return id !== undefined && value.trim().replace(/\/+$/, "") === DEFAULT_BASE_URLS[id];
+}
+
+/**
+ * Loads a .env file (default: `.env` in the current working directory) into `env` (default `process.env`), but only the
+ * variables in `PROJECT_ENV_ALLOWED`, and without overwriting variables the shell already exported — a real exported env
+ * var always wins over the file. The file is optional; a missing one is silently ignored.
+ *
+ * Returns the names it refused that look meant for Cortex (a provider's server URL that is not the usual one, any other
+ * `CORTEX_`/`OLLAMA_`/`GOOGLE_`/`ANTHROPIC_` variable), for the app to mention. Other variables are skipped without comment:
+ * a project's `.env` is full of its own settings, which are none of Cortex's business.
+ */
+export function loadDotEnv(filePath: string = path.resolve(process.cwd(), ".env"), env: NodeJS.ProcessEnv = process.env): string[] {
   let source: string;
   try {
     source = readFileSync(filePath, "utf-8");
   } catch {
-    return;
+    return [];
   }
 
+  const refused: string[] = [];
   for (const [key, value] of Object.entries(parseDotEnv(source))) {
-    if (process.env[key] === undefined) process.env[key] = value;
+    if (env[key] !== undefined) continue;
+    if (PROJECT_ENV_ALLOWED.has(key)) env[key] = value;
+    else if (CORTEX_FLAVOURED.test(key) && !isDefaultBaseUrl(key, value)) refused.push(key);
   }
+  return refused;
 }

@@ -163,13 +163,13 @@ describe("createGoogleClient", () => {
   it("posts to the model's generateContent URL with the api key header and returns the text", async () => {
     const fetchMock = vi.fn().mockResolvedValue(reply([{ text: "hello" }]));
     vi.stubGlobal("fetch", fetchMock);
-    const client = createGoogleClient({ apiKey: "secret", model: "gemini-test", baseUrl: "http://example.test" });
+    const client = createGoogleClient({ apiKey: "secret", model: "gemini-test", baseUrl: "https://example.test" });
 
     const result = await client.chat({ messages: [{ role: "user", content: "hi" }] });
 
     expect(result).toEqual({ ok: true, value: { role: "assistant", content: "hello" } });
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("http://example.test/v1beta/models/gemini-test:generateContent");
+    expect(url).toBe("https://example.test/v1beta/models/gemini-test:generateContent");
     expect((init.headers as Record<string, string>)["x-goog-api-key"]).toBe("secret");
     expect(JSON.parse(init.body as string).contents).toEqual([{ role: "user", parts: [{ text: "hi" }] }]);
   });
@@ -379,10 +379,10 @@ describe("listGoogleModels", () => {
       .mockResolvedValueOnce(jsonResponse({ models: [model("gemini-b")] }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await listGoogleModels({ apiKey: "k", baseUrl: "http://proxy.test" });
+    const result = await listGoogleModels({ apiKey: "k", baseUrl: "https://proxy.test" });
 
     expect(result.ok && result.value.map((m) => m.id)).toEqual(["gemini-a", "gemini-b"]);
-    expect(fetchMock.mock.calls[1]![0]).toBe("http://proxy.test/v1beta/models?pageSize=1000&pageToken=tok");
+    expect(fetchMock.mock.calls[1]![0]).toBe("https://proxy.test/v1beta/models?pageSize=1000&pageToken=tok");
   });
 
   it("returns an empty list, not an error, when there are no models", async () => {
@@ -402,5 +402,51 @@ describe("listGoogleModels", () => {
 
   it("is what the descriptor lists models with", () => {
     expect(googleProviderDescriptor.listModels).toBe(listGoogleModels);
+  });
+});
+
+describe("Google: where the key may go", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const request = { messages: [{ role: "user" as const, content: "hi" }] };
+  const reply = () => jsonResponse({ candidates: [{ content: { parts: [{ text: "hello" }] } }] });
+
+  it("never sends the key over plain http to another machine, for a chat, a stream or a model list", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => reply());
+    vi.stubGlobal("fetch", fetchMock);
+    const baseUrl = "http://gateway.example:8080";
+    const client = createGoogleClient({ apiKey: "AIza-SECRET", model: "gemini-test", baseUrl });
+
+    const chat = await client.chat(request);
+    const events = await collect(client.chatStream!(request));
+    const listed = await listGoogleModels({ apiKey: "AIza-SECRET", baseUrl });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(!chat.ok && chat.error.message).toContain("Google would send its API key to gateway.example over plain http");
+    expect(events).toEqual([{ type: "error", error: expect.objectContaining({ message: expect.stringContaining("over plain http") }) }]);
+    expect(!listed.ok && listed.error.message).toContain("over plain http");
+    for (const message of [!chat.ok && chat.error.message, !listed.ok && listed.error.message]) expect(message).not.toContain("AIza-SECRET");
+  });
+
+  it("still works over plain http to this machine, for a local gateway", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => reply());
+    vi.stubGlobal("fetch", fetchMock);
+
+    const chat = await createGoogleClient({ apiKey: "k", model: "gemini-test", baseUrl: "http://127.0.0.1:4000" }).chat(request);
+
+    expect(chat.ok && chat.value.content).toBe("hello");
+    expect(fetchMock.mock.calls[0]![0]).toBe("http://127.0.0.1:4000/v1beta/models/gemini-test:generateContent");
+  });
+
+  it("does not follow a redirect with the key attached, and says so", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(Object.assign(new TypeError("fetch failed"), { cause: new Error("unexpected redirect") }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const chat = await createGoogleClient({ apiKey: "k", model: "gemini-test" }).chat(request);
+
+    expect((fetchMock.mock.calls[0]![1] as RequestInit).redirect).toBe("error");
+    expect(!chat.ok && chat.error.message).toContain("redirected the request; it is not followed");
   });
 });
