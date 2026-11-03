@@ -23,13 +23,27 @@ export interface ToolLoopDeps {
   /** Estimated-token size of the history above which older turns are summarized. Defaults to 100,000. */
   contextBudgetTokens?: number;
   /**
-   * Rendered context (from @cortex/context's gatherContext), appended as a trailing
-   * `user` message on every request. Never pushed into `history` itself — appending
-   * it there would leave a trail of stale, increasingly contradictory copies as a
-   * session goes on. Keeping exactly one, freshly computed, at the end also puts it
-   * where a small model actually attends.
+   * Rendered context (from @cortex/context's gatherContext), sent as a `user` message just before the
+   * latest real user message on every request. Never pushed into `history` itself — adding it there
+   * would leave a trail of stale, increasingly contradictory copies as a session goes on; exactly one,
+   * freshly computed, is sent. It is not placed last: once a tool has run, the conversation must end
+   * on the tool's result, because a small model reads a trailing user message as a new request and
+   * starts the task over (a local Ollama model re-read the same file until the turn limit).
    */
   contextBlock?: string;
+}
+
+/** `history` as the model sees it: the context block (if any) goes in front of the latest user message. */
+function withContext(history: ChatMessage[], contextBlock: string | undefined): ChatMessage[] {
+  if (!contextBlock) return history;
+  let at = history.length;
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    if (history[index]!.role === "user") {
+      at = index;
+      break;
+    }
+  }
+  return [...history.slice(0, at), { role: "user", content: contextBlock }, ...history.slice(at)];
 }
 
 /**
@@ -84,9 +98,7 @@ export async function* runToolLoop(
     });
     if (compaction) yield { type: "compacted", ...compaction };
 
-    const requestMessages = deps.contextBlock
-      ? [...history, { role: "user" as const, content: deps.contextBlock }]
-      : history;
+    const requestMessages = withContext(history, deps.contextBlock);
     yield { type: "context", used: estimateTokens(requestMessages), budget: deps.contextBudgetTokens ?? DEFAULT_CONTEXT_BUDGET_TOKENS };
     const { result, streamed } = yield* ask(deps.llm, { messages: requestMessages, tools: deps.tools, signal });
 

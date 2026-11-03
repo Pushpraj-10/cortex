@@ -29,10 +29,16 @@ describe("toFunctionTools", () => {
 
 describe("toOllamaMessage", () => {
   it("maps role and content, dropping extra ChatMessage fields", () => {
+    expect(toOllamaMessage({ role: "user", content: "hi", name: "someone" })).toEqual({ role: "user", content: "hi" });
+  });
+
+  it("names the tool on a tool result as tool_name, so the model can tie the result to its call", () => {
     expect(toOllamaMessage({ role: "tool", content: "result", name: "search" })).toEqual({
       role: "tool",
       content: "result",
+      tool_name: "search",
     });
+    expect(toOllamaMessage({ role: "tool", content: "result" })).toEqual({ role: "tool", content: "result" });
   });
 
   it("forwards toolCalls into Ollama's tool_calls shape", () => {

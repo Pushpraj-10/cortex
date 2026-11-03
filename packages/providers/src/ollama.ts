@@ -37,6 +37,8 @@ export interface OllamaMessage {
   role: string;
   content: string;
   tool_calls?: OllamaToolCall[];
+  /** On a role:"tool" message: which tool produced the result, so the model can tie it to the call it made. */
+  tool_name?: string;
 }
 
 export interface OllamaRequestBody {
@@ -67,6 +69,7 @@ interface OllamaStreamChunk {
  */
 export function toOllamaMessage(message: ChatMessage): OllamaMessage {
   const mapped: OllamaMessage = { role: message.role, content: message.content };
+  if (message.role === "tool" && message.name) mapped.tool_name = message.name;
   if (message.toolCalls && message.toolCalls.length > 0) {
     mapped.tool_calls = message.toolCalls.map((call) => ({ function: { name: call.toolName, arguments: call.args } }));
   }

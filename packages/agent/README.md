@@ -19,7 +19,7 @@ for await (const event of session.chat("fix the parser", signal)) { /* message |
    The `toolResult` event carries `ok`, and `refused: true` when the call was stopped by a decision (the user declined, policy denied it, a hook blocked it) rather than failing, so a UI can tell "no" from "broke" without reading the message.
 5. The result goes back into the history (oversized results are truncated) and the loop repeats, up to `maxIterations` (default 16). `Stop` hooks run at the end.
 
-The context block is appended to each request as a trailing user message but never stored in the history, so stale copies do not pile up.
+The context block is sent with each request as a user message just before the latest real user message, but never stored in the history, so stale copies do not pile up. It is deliberately not last: once a tool has run, a request must end on that tool's result, because a small model reads a trailing user message as a new request and starts the task over (a local Ollama model re-read the same file until the turn limit).
 
 ## Public API
 

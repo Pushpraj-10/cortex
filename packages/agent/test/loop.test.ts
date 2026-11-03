@@ -166,7 +166,7 @@ describe("runToolLoop", () => {
     expect(execute).toHaveBeenCalledWith("add_numbers", { a: 1, b: 2 }, controller.signal);
   });
 
-  it("appends contextBlock as a trailing user message on the request, without persisting it into history", async () => {
+  it("sends contextBlock as a user message in front of the latest user message, without persisting it into history", async () => {
     const chat = vi.fn().mockResolvedValue(ok({ role: "assistant", content: "hi" }));
     const llm: LLMProvider = { chat };
     const executor: Executor = { execute: vi.fn() };
@@ -176,13 +176,45 @@ describe("runToolLoop", () => {
 
     expect(chat).toHaveBeenCalledWith(
       expect.objectContaining({
-        messages: [{ role: "user", content: "hi" }, { role: "user", content: "# Workspace Context\n\nsome info" }],
+        messages: [{ role: "user", content: "# Workspace Context\n\nsome info" }, { role: "user", content: "hi" }],
       }),
     );
     expect(history).toEqual([{ role: "user", content: "hi" }, { role: "assistant", content: "hi" }]);
   });
 
-  it("appends contextBlock on every iteration of a multi-tool-call turn", async () => {
+  it("never lets a request end on the context block: after a tool runs, the last message is its result", async () => {
+    const llm = llmReturning(
+      ok({ role: "assistant", content: "", toolCalls: [{ toolName: "add_numbers", args: { a: 1, b: 2 } }] }),
+      ok({ role: "assistant", content: "3" }),
+    );
+    const chat = llm.chat as unknown as ReturnType<typeof vi.fn>;
+    const executor: Executor = { execute: vi.fn().mockResolvedValue(ok(3)) };
+    const history: ChatMessage[] = [
+      { role: "system", content: "sys" },
+      { role: "user", content: "earlier" },
+      { role: "assistant", content: "ok" },
+      { role: "user", content: "add 1 and 2" },
+    ];
+
+    await collect(runToolLoop(history, { llm, executor, tools: [], contextBlock: "ctx" }));
+
+    const second = chat.mock.calls[1]![0].messages as ChatMessage[];
+    expect(second.map((m) => m.role)).toEqual(["system", "user", "assistant", "user", "user", "assistant", "tool"]);
+    expect(second[3]).toEqual({ role: "user", content: "ctx" });
+    expect(second[4]).toEqual({ role: "user", content: "add 1 and 2" });
+    expect(second.at(-1)?.role).toBe("tool");
+  });
+
+  it("puts the context block at the end only when there is no user message to put it in front of", async () => {
+    const chat = vi.fn().mockResolvedValue(ok({ role: "assistant", content: "hi" }));
+    const history: ChatMessage[] = [{ role: "system", content: "sys" }];
+
+    await collect(runToolLoop(history, { llm: { chat }, executor: { execute: vi.fn() }, tools: [], contextBlock: "ctx" }));
+
+    expect(chat.mock.calls[0]![0].messages).toEqual([{ role: "system", content: "sys" }, { role: "user", content: "ctx" }]);
+  });
+
+  it("sends contextBlock on every iteration of a multi-tool-call turn", async () => {
     const llm = llmReturning(
       ok({ role: "assistant", content: "", toolCalls: [{ toolName: "add_numbers", args: { a: 1, b: 2 } }] }),
       ok({ role: "assistant", content: "done" }),
@@ -196,7 +228,8 @@ describe("runToolLoop", () => {
     expect(chat).toHaveBeenCalledTimes(2);
     for (const call of chat.mock.calls) {
       const messages = call[0].messages as ChatMessage[];
-      expect(messages.at(-1)).toEqual({ role: "user", content: "ctx" });
+      expect(messages.filter((m) => m.content === "ctx")).toEqual([{ role: "user", content: "ctx" }]);
+      expect(messages.at(-1)).not.toEqual({ role: "user", content: "ctx" });
     }
     expect(history.some((m) => m.content === "ctx")).toBe(false);
   });

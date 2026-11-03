@@ -109,7 +109,8 @@ describe("createAgentSession", () => {
 
     await collect(session.chat("hello"));
 
-    expect(sentMessages[0]?.at(-1)).toEqual({ role: "user", content: "# Workspace Context\n\nsome info" });
+    expect(sentMessages[0]?.at(-2)).toEqual({ role: "user", content: "# Workspace Context\n\nsome info" });
+    expect(sentMessages[0]?.at(-1)).toEqual({ role: "user", content: "hello" });
   });
 });
 
