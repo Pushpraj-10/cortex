@@ -1,13 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { PROVIDER_IDS } from "../../src/provider/config.js";
 import {
+  CUSTOM_MODEL_NAME,
   PROVIDER_FIELDS,
+  asksForModel,
   currentField,
   describeStatus,
+  initialModelIndex,
   maskValue,
+  modelChoices,
   promptHint,
   startSetup,
   submitField,
+  windowOf,
 } from "../../src/provider/setup.js";
 
 describe("PROVIDER_FIELDS", () => {
@@ -15,6 +20,14 @@ describe("PROVIDER_FIELDS", () => {
     for (const id of PROVIDER_IDS) {
       expect(PROVIDER_FIELDS[id].length).toBeGreaterThan(0);
       for (const field of PROVIDER_FIELDS[id]) expect(field.secret).toBe(field.key === "apiKey");
+    }
+  });
+
+  it("asks for the model last, so that everything needed to list the models has been answered by then", () => {
+    for (const id of PROVIDER_IDS) {
+      const fields = PROVIDER_FIELDS[id];
+      expect(fields[fields.length - 1]!.key).toBe("model");
+      expect(fields.filter((field) => field.key === "model")).toHaveLength(1);
     }
   });
 
@@ -67,19 +80,19 @@ describe("submitField", () => {
   });
 
   it("skips an optional field left empty", () => {
-    const afterModel = submitField(startSetup("ollama"), "llama3.1");
-    expect(afterModel.kind).toBe("next");
+    const afterUrl = submitField(startSetup("ollama"), "");
+    expect(afterUrl.kind).toBe("next");
 
-    const done = submitField((afterModel as { state: ReturnType<typeof startSetup> }).state, "");
+    const done = submitField((afterUrl as { state: ReturnType<typeof startSetup> }).state, "llama3.1");
     expect(done).toEqual({ kind: "done", provider: "ollama", values: { model: "llama3.1" } });
   });
 
   it("collects an optional field when it is given", () => {
-    const afterModel = submitField(startSetup("ollama"), "llama3.1") as { state: ReturnType<typeof startSetup> };
-    expect(submitField(afterModel.state, "http://gpu-box:11434")).toEqual({
+    const afterUrl = submitField(startSetup("ollama"), "http://gpu-box:11434") as { state: ReturnType<typeof startSetup> };
+    expect(submitField(afterUrl.state, "llama3.1")).toEqual({
       kind: "done",
       provider: "ollama",
-      values: { model: "llama3.1", baseUrl: "http://gpu-box:11434" },
+      values: { baseUrl: "http://gpu-box:11434", model: "llama3.1" },
     });
   });
 });
@@ -92,12 +105,12 @@ describe("promptHint", () => {
   });
 
   it("shows a saved non-secret value and marks optional fields", () => {
-    const afterModel = submitField(startSetup("ollama", { baseUrl: "http://box:1" }), "llama3.1") as { state: ReturnType<typeof startSetup> };
-    expect(promptHint(afterModel.state)).toBe('enter keeps "http://box:1"');
-    expect(promptHint(startSetup("ollama", { model: "m" }))).toBe('enter keeps "m"');
+    expect(promptHint(startSetup("ollama", { baseUrl: "http://box:1" }))).toBe('enter keeps "http://box:1"');
 
-    const optionalFresh = submitField(startSetup("ollama"), "llama3.1") as { state: ReturnType<typeof startSetup> };
-    expect(promptHint(optionalFresh.state)).toBe("optional — enter to skip");
+    const afterUrl = submitField(startSetup("ollama", { model: "m" }), "") as { state: ReturnType<typeof startSetup> };
+    expect(promptHint(afterUrl.state)).toBe('enter keeps "m"');
+
+    expect(promptHint(startSetup("ollama"))).toBe("optional — enter to skip");
   });
 });
 
@@ -128,5 +141,99 @@ describe("describeStatus", () => {
     expect(describeStatus({ id: "ollama", active: false, configured: true, model: "llama3.1", needsKey: false, hasKey: false })).toBe(
       "Ollama (local) · llama3.1",
     );
+  });
+});
+
+describe("asksForModel", () => {
+  it("is true exactly when the next question is the model", () => {
+    const afterKey = submitField(startSetup("google"), "key") as { state: ReturnType<typeof startSetup> };
+    expect(asksForModel(startSetup("google"))).toBe(false);
+    expect(asksForModel(afterKey.state)).toBe(true);
+
+    const afterUrl = submitField(startSetup("ollama"), "") as { state: ReturnType<typeof startSetup> };
+    expect(asksForModel(startSetup("ollama"))).toBe(false);
+    expect(asksForModel(afterUrl.state)).toBe(true);
+  });
+
+  it("is what the answer that completes the lookup's inputs turns on, for every provider", () => {
+    for (const id of PROVIDER_IDS) {
+      let state = startSetup(id);
+      let asked = false;
+      for (let step = 0; step < PROVIDER_FIELDS[id].length && !asked; step++) {
+        const outcome = submitField(state, currentField(state).secret ? "key" : "");
+        if (outcome.kind === "next") {
+          asked = asksForModel(outcome.state);
+          state = outcome.state;
+        }
+      }
+      expect(asked).toBe(true);
+    }
+  });
+});
+
+describe("modelChoices", () => {
+  const models = [{ id: "claude-a", displayName: "Claude A" }, { id: "plain" }, { id: "same", displayName: "same" }];
+
+  it("lists each model with its display name, then a way to type one that is not listed", () => {
+    const choices = modelChoices(models);
+    expect(choices.map((choice) => choice.id)).toEqual(["claude-a", "plain", "same", CUSTOM_MODEL_NAME]);
+    expect(choices[0]!.description).toBe("Claude A");
+    expect(choices[1]!.description).toBe("");
+    expect(choices[2]!.description).toBe(""); // a display name that only repeats the id adds nothing
+    expect(choices.map((choice) => Boolean(choice.custom))).toEqual([false, false, false, true]);
+  });
+
+  it("marks the model already in use", () => {
+    const choices = modelChoices(models, "claude-a");
+    expect(choices[0]!.description).toBe("Claude A · current");
+    expect(modelChoices(models, "plain")[1]!.description).toBe("current");
+    expect(modelChoices(models, "not-listed").some((choice) => choice.description.includes("current"))).toBe(false);
+  });
+
+  it("offers the way to type a name even when nothing was listed", () => {
+    expect(modelChoices([]).map((choice) => choice.custom)).toEqual([true]);
+  });
+});
+
+describe("initialModelIndex", () => {
+  const choices = modelChoices([{ id: "a" }, { id: "b" }, { id: "c" }]);
+
+  it("starts on the model already in use if it is listed", () => {
+    expect(initialModelIndex(choices, "c")).toBe(2);
+  });
+
+  it("starts on the first model otherwise", () => {
+    expect(initialModelIndex(choices)).toBe(0);
+    expect(initialModelIndex(choices, "gone")).toBe(0);
+  });
+
+  it("never starts on the way-out entry, even if a model is named like it", () => {
+    expect(initialModelIndex(choices, CUSTOM_MODEL_NAME)).toBe(0);
+  });
+});
+
+describe("windowOf", () => {
+  const items = Array.from({ length: 20 }, (_, index) => index);
+
+  it("shows everything when the list fits", () => {
+    expect(windowOf([1, 2, 3], 1, 8)).toEqual({ items: [1, 2, 3], selected: 1 });
+    expect(windowOf([], 0, 8)).toEqual({ items: [], selected: 0 });
+  });
+
+  it("keeps the selection inside a window of the given size, wherever it is", () => {
+    for (let selected = 0; selected < items.length; selected++) {
+      const shown = windowOf(items, selected, 8);
+      expect(shown.items).toHaveLength(8);
+      expect(shown.items[shown.selected]).toBe(selected);
+    }
+  });
+
+  it("stays at the top at the start and at the bottom at the end, instead of running past either", () => {
+    expect(windowOf(items, 0, 8).items[0]).toBe(0);
+    expect(windowOf(items, 19, 8).items.at(-1)).toBe(19);
+  });
+
+  it("scrolls with the selection, keeping it near the middle", () => {
+    expect(windowOf(items, 10, 8)).toEqual({ items: [6, 7, 8, 9, 10, 11, 12, 13], selected: 4 });
   });
 });

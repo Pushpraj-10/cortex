@@ -89,15 +89,20 @@ interface SetupPromptProps {
   hint: string;
   /** Why the last answer was rejected; replaces the hint until the next one. */
   error?: string;
+  /** Waiting on something (looking up models) rather than asking: there is nothing to confirm, only to cancel. */
+  busy?: boolean;
 }
 
 /** The question shown above the input box during `/provider`. The answer is typed into the input box itself. */
-export function SetupPrompt({ title, label, hint, error }: SetupPromptProps) {
+export function SetupPrompt({ title, label, hint, error, busy }: SetupPromptProps) {
   const theme = useTheme();
+  const second = error
+    ? { text: error, color: theme.status.error }
+    : { text: busy ? `${hint} · esc to cancel` : `${hint} · enter to confirm · esc to cancel`, color: theme.muted };
   return (
     <Box flexDirection="column">
       <PanelRow pieces={[{ text: title, bold: true }, { text: ` — ${label}` }]} />
-      <PanelRow pieces={error ? [{ text: error, color: theme.status.error }] : [{ text: `${hint} · enter to confirm · esc to cancel`, color: theme.muted }]} />
+      <PanelRow pieces={[second]} />
     </Box>
   );
 }

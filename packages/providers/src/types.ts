@@ -65,6 +65,14 @@ export interface LLMProvider {
   chatStream?(request: ChatRequest): AsyncGenerator<StreamEvent, void, void>;
 }
 
+/** One model a provider offers, as listed by the provider itself. */
+export interface ModelInfo {
+  /** The name to put in the config and send with requests, e.g. "claude-sonnet-5-5". */
+  id: string;
+  /** A friendlier name when the provider has one, e.g. "Claude Sonnet 5.5". */
+  displayName?: string;
+}
+
 /**
  * Descriptor for a provider — metadata + factory function to create a client.
  * Providers do not register themselves; the composition root decides which are active.
@@ -73,4 +81,10 @@ export interface LLMProviderDescriptor<TConfig = unknown> {
   id: string;
   displayName: string;
   createClient(config: TConfig): LLMProvider;
+  /**
+   * Asks the provider which models this config (key, server URL) can use that are fit for the agent, so a user can
+   * pick one instead of typing its name. Takes the config without a model, since choosing the model is the point.
+   * Optional: a provider with no way to list models omits it. Failures (bad key, unreachable server) are a Result.
+   */
+  listModels?(config: Omit<TConfig, "model">, signal?: AbortSignal): Promise<Result<ModelInfo[]>>;
 }

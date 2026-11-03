@@ -271,3 +271,115 @@ describe("createProviderManager llm.chatStream", () => {
     expect(await events(manager.llm.chatStream!(request))).toMatchObject([{ type: "error", error: { message: "down", code: "TEST_DOWN" } }]);
   });
 });
+
+describe("createProviderManager.listModels", () => {
+  let root: string;
+  let home: string;
+  const fetchMock = vi.fn();
+
+  beforeAll(() => {
+    for (const descriptor of [ollamaProviderDescriptor, googleProviderDescriptor, anthropicProviderDescriptor]) {
+      registerLlmProvider(descriptor);
+    }
+  });
+
+  beforeEach(async () => {
+    root = await fs.mkdtemp(path.join(process.cwd(), "test-"));
+    home = path.join(root, "home");
+    await fs.mkdir(home);
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
+  const googleModels = () => new Response(JSON.stringify({ models: [{ name: "models/gemini-x", supportedGenerationMethods: ["generateContent"] }] }));
+  const ids = (result: { ok: boolean; value?: { id: string }[] }) => result.value?.map((model) => model.id);
+
+  it("lists a provider's models with the key that was just typed", async () => {
+    fetchMock.mockResolvedValue(googleModels());
+    const manager = createProviderManager({ env: {}, home });
+
+    const result = await manager.listModels("google", { apiKey: SECRET });
+
+    expect(result.ok && ids(result)).toEqual(["gemini-x"]);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("generativelanguage.googleapis.com/v1beta/models");
+    expect(init.headers).toEqual({ "x-goog-api-key": SECRET });
+  });
+
+  it("falls back to the saved key and server URL, then the environment's, when none was typed", async () => {
+    fetchMock.mockResolvedValue(googleModels());
+    await saveProviderCredentials("google", { apiKey: "saved-key" }, { home });
+    const manager = createProviderManager({ env: { GOOGLE_BASE_URL: "http://proxy.test" }, home });
+
+    await manager.listModels("google", {});
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://proxy.test/v1beta/models?pageSize=1000");
+    expect(init.headers).toEqual({ "x-goog-api-key": "saved-key" });
+  });
+
+  it("prefers what was typed over what is saved", async () => {
+    fetchMock.mockResolvedValue(googleModels());
+    await saveProviderCredentials("google", { apiKey: "saved-key" }, { home });
+    const manager = createProviderManager({ env: {}, home });
+
+    await manager.listModels("google", { apiKey: "typed-key" });
+
+    expect((fetchMock.mock.calls[0] as [string, RequestInit])[1].headers).toEqual({ "x-goog-api-key": "typed-key" });
+  });
+
+  it("fails without calling out when a provider that needs a key has none", async () => {
+    const manager = createProviderManager({ env: {}, home });
+
+    const result = await manager.listModels("anthropic", {});
+
+    expect(!result.ok && result.error.code).toBe("CLI_NO_API_KEY");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("needs no key for Ollama, and asks the server it was told about", async () => {
+    fetchMock.mockImplementation(async (url: string) =>
+      url.endsWith("/api/tags") ? new Response(JSON.stringify({ models: [{ name: "llama3.1" }] })) : new Response(JSON.stringify({ capabilities: ["tools"] })),
+    );
+    const manager = createProviderManager({ env: {}, home });
+
+    const result = await manager.listModels("ollama", { baseUrl: "http://gpu-box:11434" });
+
+    expect(result.ok && ids(result)).toEqual(["llama3.1"]);
+    expect(fetchMock.mock.calls[0]![0]).toBe("http://gpu-box:11434/api/tags");
+  });
+
+  it("reports a provider that rejects the key, and never repeats the key even if the provider does", async () => {
+    fetchMock.mockResolvedValue(new Response(`{"error":"API key ${SECRET} is not valid"}`, { status: 400 }));
+    const manager = createProviderManager({ env: {}, home });
+
+    const result = await manager.listModels("google", { apiKey: SECRET });
+
+    expect(!result.ok && result.error.message).toContain("Google returned 400");
+    expect(!result.ok && result.error.message).not.toContain(SECRET);
+  });
+
+  it("reports an unreachable provider without the key", async () => {
+    fetchMock.mockRejectedValue(new Error(`connect ECONNREFUSED while sending ${SECRET}`));
+    const manager = createProviderManager({ env: {}, home });
+
+    const result = await manager.listModels("anthropic", { apiKey: SECRET });
+
+    expect(!result.ok && result.error.message).toBe("Failed to reach Anthropic at https://api.anthropic.com");
+  });
+
+  it("offers nothing for a provider that cannot list its models", async () => {
+    registerLlmProvider({ id: "no-listing", displayName: "No listing", createClient: () => ({ chat: async () => ok({ role: "assistant", content: "" }) }) });
+    const manager = createProviderManager({ env: {}, home });
+
+    const result = await manager.listModels("no-listing" as never, {});
+
+    expect(result).toEqual({ ok: true, value: [] });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

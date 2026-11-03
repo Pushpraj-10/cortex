@@ -7,7 +7,7 @@ import React from "react";
 import { PassThrough } from "node:stream";
 import { render } from "ink";
 import { vi } from "vitest";
-import { ok } from "@cortex/core";
+import { CortexError, err, ok } from "@cortex/core";
 import type { AgentPolicy, AgentSession } from "@cortex/agent";
 import { createPermissionBridge } from "../../../src/runtime/permission-bridge.js";
 import { PROVIDER_IDS } from "../../../src/provider/config.js";
@@ -54,6 +54,8 @@ export interface DrivenApp {
   remembered: string[];
   /** Every `/provider` save: which provider, with which values. */
   configured: { provider: string; values: Record<string, string | undefined> }[];
+  /** Every time `/provider` asked for a provider's models: which provider, with which answers so far. */
+  listed: { provider: string; values: Record<string, string | undefined> }[];
   /** How many `resize` listeners the app has on the terminal; Node warns past ten. */
   resizeListeners(): number;
   unmount(): Promise<void>;
@@ -62,10 +64,12 @@ export interface DrivenApp {
 export interface DriveOptions extends Partial<AppProps> {
   columns?: number;
   rows?: number;
+  /** What `/provider` gets when it asks for a provider's models. Fails by default, so the model is typed. */
+  listModels?: ProviderManager["listModels"];
 }
 
 export async function driveApp(options: DriveOptions = {}): Promise<DrivenApp> {
-  const { columns = 100, rows = 40, ...props } = options;
+  const { columns = 100, rows = 40, listModels: _listModels, ...props } = options;
 
   // The app switches to the alternate screen by writing to the real stdout; keep that out of the test output.
   const stdoutWrite = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
@@ -86,6 +90,7 @@ export async function driveApp(options: DriveOptions = {}): Promise<DrivenApp> {
   const sent: string[] = [];
   const remembered: string[] = [];
   const configured: DrivenApp["configured"] = [];
+  const listed: DrivenApp["listed"] = [];
 
   const session: AgentSession = {
     // eslint-disable-next-line require-yield
@@ -100,6 +105,10 @@ export async function driveApp(options: DriveOptions = {}): Promise<DrivenApp> {
     active: () => active,
     status: async () => PROVIDER_IDS.map((id) => ({ id, active: id === active?.provider, configured: true, needsKey: id !== "ollama", hasKey: false })),
     saved: async () => ({}),
+    listModels: async (provider, values, signal) => {
+      listed.push({ provider, values: { ...values } });
+      return (options.listModels ?? (async () => err(new CortexError("this test has no model list", "TEST_NO_MODELS"))))(provider, values, signal);
+    },
     configure: async (provider, values) => {
       configured.push({ provider, values: { ...values } });
       active = { provider, model: values.model ?? "model" };
@@ -147,6 +156,7 @@ export async function driveApp(options: DriveOptions = {}): Promise<DrivenApp> {
     sent,
     remembered,
     configured,
+    listed,
     resizeListeners: () => stdout.listenerCount("resize"),
     unmount: async () => {
       app.unmount();

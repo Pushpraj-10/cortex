@@ -281,6 +281,11 @@ export function App({
         else if (key.escape) setup.cancel();
         return;
       }
+      // Looking up the provider's models: nothing to answer, so typing is ignored; esc gives up.
+      if (setup.stage === "loading") {
+        if (key.escape) setup.cancel();
+        return;
+      }
       if (setup.stage === "field") {
         if (key.return) {
           const answer = input.value;
@@ -398,7 +403,7 @@ export function App({
   );
 
   // Home and End: Ink's useInput does not report them. Same moments as typing: not during an approval, a turn or the provider picker.
-  const typingAllowed = isRawModeSupported && !chat.pendingPermission && !chat.isThinking && setup.stage !== "select";
+  const typingAllowed = isRawModeSupported && !chat.pendingPermission && !chat.isThinking && setup.stage !== "select" && setup.stage !== "loading";
   // The wheel scrolls the transcript at any moment, like page up and down, three rows to a notch.
   useMouseWheel((notches) => (notches > 0 ? scroll.scrollUp(notches * WHEEL_ROWS) : scroll.scrollDown(-notches * WHEEL_ROWS)), isRawModeSupported);
   useHomeEnd((edge: EdgeKey) => input.apply(edge === "home" ? moveToLineStart : moveToLineEnd), typingAllowed);
@@ -435,7 +440,9 @@ export function App({
   } else if (setup.prompt) {
     overlay = {
       rows: SETUP_PROMPT_ROWS,
-      content: <SetupPrompt title={setup.prompt.title} label={setup.prompt.label} hint={setup.prompt.hint} error={setup.prompt.error} />,
+      content: (
+        <SetupPrompt title={setup.prompt.title} label={setup.prompt.label} hint={setup.prompt.hint} error={setup.prompt.error} busy={setup.prompt.busy} />
+      ),
     };
   } else if (pickerOpen) {
     overlay = {

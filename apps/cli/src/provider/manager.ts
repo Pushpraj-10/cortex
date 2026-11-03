@@ -14,7 +14,7 @@ import {
   type StoredProvider,
 } from "@cortex/config";
 import { CortexError, err, ok, type Result } from "@cortex/core";
-import { getLlmProvider, type LLMProvider } from "@cortex/providers";
+import { getLlmProvider, type LLMProvider, type ModelInfo } from "@cortex/providers";
 import {
   PROVIDER_ENV,
   PROVIDER_IDS,
@@ -53,6 +53,12 @@ export interface ProviderManager {
   status(): Promise<ProviderStatus[]>;
   /** What is saved on disk for a provider (not the environment). */
   saved(provider: ProviderId): Promise<StoredProvider>;
+  /**
+   * The models a provider offers to this key / server, for `/provider` to pick from. `values` are the answers given so far
+   * (they win over what is saved or in the environment). Fails when the provider cannot be reached or rejects the key; an
+   * empty list means it has nothing usable to offer. The error text never contains the key.
+   */
+  listModels(provider: ProviderId, values: StoredProvider, signal?: AbortSignal): Promise<Result<ModelInfo[]>>;
   /** Saves the values, makes the provider the default, and switches the running app to it. */
   configure(provider: ProviderId, values: StoredProvider): Promise<Result<ConfigureResult>>;
   remove(provider: ProviderId): Promise<Result<{ removed: boolean }>>;
@@ -134,6 +140,22 @@ export function createProviderManager(options: ProviderManagerOptions): Provider
 
     async saved(provider) {
       return (await loadCredentials(options.home)).providers[provider] ?? {};
+    },
+
+    async listModels(provider, values, signal) {
+      const descriptor = getLlmProvider(provider);
+      if (!descriptor.listModels) return ok([]);
+
+      const env = await effectiveEnv();
+      const names = PROVIDER_ENV[provider];
+      const apiKey = values.apiKey || (names.apiKey ? env[names.apiKey] : undefined) || undefined;
+      const baseUrl = values.baseUrl || env[names.baseUrl] || undefined;
+      if (names.apiKey && !apiKey) return failure("There is no API key to look up models with.", "CLI_NO_API_KEY");
+
+      const listed = await descriptor.listModels({ ...(apiKey ? { apiKey } : {}), ...(baseUrl ? { baseUrl } : {}) }, signal);
+      if (listed.ok || !apiKey) return listed;
+      // Whatever the provider sent back, the key is not repeated: the message is shown to the user and kept in the transcript.
+      return failure(listed.error.message.split(apiKey).join("…"), listed.error.code);
     },
 
     async configure(provider, values) {

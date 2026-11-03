@@ -8,8 +8,8 @@
  * `tool_use` must be answered by a `tool_result` with the same id.
  */
 import { err, ok, type Result } from "@cortex/core";
-import type { ChatMessage, ChatRequest, LLMProvider, LLMProviderDescriptor, StreamEvent, ToolCall } from "./types.js";
-import { ProviderRequestError, postJson, postStream, readSseData, streamInterrupted } from "./wire.js";
+import type { ChatMessage, ChatRequest, LLMProvider, LLMProviderDescriptor, ModelInfo, StreamEvent, ToolCall } from "./types.js";
+import { ProviderRequestError, getJson, postJson, postStream, readSseData, streamInterrupted } from "./wire.js";
 
 export interface AnthropicConfig {
   apiKey: string;
@@ -244,9 +244,51 @@ export function createAnthropicClient(config: AnthropicConfig): LLMProvider {
   };
 }
 
+// ---- model listing ---------------------------------------------------------------
+
+interface AnthropicModelsPage {
+  data?: { id?: string; display_name?: string }[];
+  has_more?: boolean;
+  last_id?: string | null;
+}
+
+/** A key can see a few dozen models at most; this only stops a server that always says "more" from looping forever. */
+const MAX_MODEL_PAGES = 10;
+
+/**
+ * Lists the models the key can use, newest first (the order the API gives). Doubles as a check that the key works:
+ * a bad key comes back as the API's own 401, in the error. Every model Anthropic lists takes tools, so none is filtered out.
+ */
+export async function listAnthropicModels(config: Omit<AnthropicConfig, "model">, signal?: AbortSignal): Promise<Result<ModelInfo[]>> {
+  const baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
+  const models: ModelInfo[] = [];
+
+  let afterId: string | undefined;
+  for (let page = 0; page < MAX_MODEL_PAGES; page++) {
+    const query = new URLSearchParams({ limit: "1000", ...(afterId ? { after_id: afterId } : {}) });
+    const reply = await getJson<AnthropicModelsPage>({
+      provider: "Anthropic",
+      baseUrl,
+      url: `${baseUrl}/v1/models?${query}`,
+      headers: { "x-api-key": config.apiKey, "anthropic-version": API_VERSION },
+      signal,
+    });
+    if (!reply.ok) return reply;
+
+    for (const model of reply.value.data ?? []) {
+      if (!model.id) continue;
+      models.push(model.display_name ? { id: model.id, displayName: model.display_name } : { id: model.id });
+    }
+    if (!reply.value.has_more || !reply.value.last_id) break;
+    afterId = reply.value.last_id;
+  }
+  return ok(models);
+}
+
 /** Not auto-registered; the composition root calls registerLlmProvider() explicitly. */
 export const anthropicProviderDescriptor: LLMProviderDescriptor<AnthropicConfig> = {
   id: "anthropic",
   displayName: "Anthropic (cloud)",
   createClient: createAnthropicClient,
+  listModels: listAnthropicModels,
 };

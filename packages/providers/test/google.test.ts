@@ -4,6 +4,7 @@ import {
   createGoogleClient,
   fromGoogleParts,
   googleProviderDescriptor,
+  listGoogleModels,
   toGoogleContents,
 } from "../src/google.js";
 import { ProviderRequestError } from "../src/wire.js";
@@ -323,5 +324,83 @@ describe("createGoogleClient chatStream", () => {
       if (events.length === 1) controller.abort();
     }
     expect(events[1]).toMatchObject({ type: "error", error: { message: "Google request was cancelled" } });
+  });
+});
+
+describe("listGoogleModels", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const GENERATE = ["generateContent", "countTokens"];
+  const model = (name: string, methods = GENERATE, displayName?: string) => ({ name: `models/${name}`, displayName, supportedGenerationMethods: methods });
+
+  it("asks /v1beta/models with the key in a header (not the URL), and strips the models/ prefix", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ models: [model("gemini-2.5-pro", GENERATE, "Gemini 2.5 Pro"), model("gemini-2.5-flash")] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await listGoogleModels({ apiKey: "AIza-SECRET" });
+
+    expect(result).toEqual({ ok: true, value: [{ id: "gemini-2.5-pro", displayName: "Gemini 2.5 Pro" }, { id: "gemini-2.5-flash" }] });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000");
+    expect(url).not.toContain("AIza-SECRET");
+    expect(init.headers).toEqual({ "x-goog-api-key": "AIza-SECRET" });
+  });
+
+  it("keeps only the models that can chat: generateContent, and not speech, image or embedding models", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          models: [
+            model("gemini-2.5-flash"),
+            model("gemini-2.0-flash-lite"),
+            model("gemini-embedding-001", ["embedContent"]),
+            model("imagen-4.0-generate-001", ["predict"]),
+            model("aqa", ["generateAnswer"]),
+            model("gemini-2.5-flash-preview-tts"),
+            model("gemini-2.5-flash-image"),
+            model("gemini-live-2.5-flash", ["bidiGenerateContent"]),
+          ],
+        }),
+      ),
+    );
+
+    const result = await listGoogleModels({ apiKey: "k" });
+
+    expect(result.ok && result.value.map((m) => m.id)).toEqual(["gemini-2.5-flash", "gemini-2.0-flash-lite"]);
+  });
+
+  it("follows page tokens until there is none", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ models: [model("gemini-a")], nextPageToken: "tok" }))
+      .mockResolvedValueOnce(jsonResponse({ models: [model("gemini-b")] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await listGoogleModels({ apiKey: "k", baseUrl: "http://proxy.test" });
+
+    expect(result.ok && result.value.map((m) => m.id)).toEqual(["gemini-a", "gemini-b"]);
+    expect(fetchMock.mock.calls[1]![0]).toBe("http://proxy.test/v1beta/models?pageSize=1000&pageToken=tok");
+  });
+
+  it("returns an empty list, not an error, when there are no models", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({})));
+    expect(await listGoogleModels({ apiKey: "k" })).toEqual({ ok: true, value: [] });
+  });
+
+  it("reports a rejected key with the API's status, and never repeats the key", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ error: { message: "API key not valid." } }, 400)));
+
+    const result = await listGoogleModels({ apiKey: "AIza-SECRET" });
+
+    expect(!result.ok && result.error).toBeInstanceOf(ProviderRequestError);
+    expect(!result.ok && result.error.message).toContain("Google returned 400");
+    expect(!result.ok && result.error.message).not.toContain("AIza-SECRET");
+  });
+
+  it("is what the descriptor lists models with", () => {
+    expect(googleProviderDescriptor.listModels).toBe(listGoogleModels);
   });
 });

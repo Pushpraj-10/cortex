@@ -4,6 +4,7 @@ import {
   buildAnthropicRequest,
   createAnthropicClient,
   fromAnthropicContent,
+  listAnthropicModels,
   toAnthropicMessages,
 } from "../src/anthropic.js";
 import { ProviderRequestError } from "../src/wire.js";
@@ -272,5 +273,91 @@ describe("createAnthropicClient chatStream", () => {
       if (event.type === "text") controller.abort();
     }
     expect(events[events.length - 1]).toMatchObject({ type: "error", error: { message: "Anthropic request was cancelled" } });
+  });
+});
+
+describe("listAnthropicModels", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const page = (ids: string[], more?: { has_more: true; last_id: string }) =>
+    jsonResponse({ data: ids.map((id) => ({ id, display_name: `Name of ${id}` })), has_more: more?.has_more ?? false, last_id: more?.last_id ?? null });
+
+  it("asks /v1/models with the key and version headers, and returns each model's id and display name", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(page(["claude-a", "claude-b"]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await listAnthropicModels({ apiKey: "k" });
+
+    expect(result).toEqual({
+      ok: true,
+      value: [
+        { id: "claude-a", displayName: "Name of claude-a" },
+        { id: "claude-b", displayName: "Name of claude-b" },
+      ],
+    });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://api.anthropic.com/v1/models?limit=1000");
+    expect(init.method).toBe("GET");
+    expect(init.headers).toEqual({ "x-api-key": "k", "anthropic-version": "2023-06-01" });
+  });
+
+  it("uses a custom base URL, and leaves out a display name the API did not give", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: [{ id: "bare" }, { display_name: "no id" }] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await listAnthropicModels({ apiKey: "k", baseUrl: "http://proxy.test" });
+
+    expect(result).toEqual({ ok: true, value: [{ id: "bare" }] });
+    expect(fetchMock.mock.calls[0]![0]).toBe("http://proxy.test/v1/models?limit=1000");
+  });
+
+  it("follows pages until the API says there are no more", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(page(["m1", "m2"], { has_more: true, last_id: "m2" }))
+      .mockResolvedValueOnce(page(["m3"]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await listAnthropicModels({ apiKey: "k" });
+
+    expect(result.ok && result.value.map((model) => model.id)).toEqual(["m1", "m2", "m3"]);
+    expect(fetchMock.mock.calls[1]![0]).toBe("https://api.anthropic.com/v1/models?limit=1000&after_id=m2");
+  });
+
+  it("stops after a bounded number of pages if the API never stops saying there are more", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => page(["again"], { has_more: true, last_id: "again" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await listAnthropicModels({ apiKey: "k" });
+
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(10);
+  });
+
+  it("returns an empty list, not an error, when there are no models", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({})));
+    expect(await listAnthropicModels({ apiKey: "k" })).toEqual({ ok: true, value: [] });
+  });
+
+  it("reports a rejected key with the API's status, and never repeats the key", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response('{"error":{"message":"invalid x-api-key"}}', { status: 401 })));
+
+    const result = await listAnthropicModels({ apiKey: "sk-ant-SECRET" });
+
+    expect(!result.ok && result.error).toBeInstanceOf(ProviderRequestError);
+    expect(!result.ok && result.error.message).toContain("Anthropic returned 401");
+    expect(!result.ok && result.error.message).not.toContain("sk-ant-SECRET");
+  });
+
+  it("reports an unreachable API without the key", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
+    const result = await listAnthropicModels({ apiKey: "sk-ant-SECRET" });
+    expect(!result.ok && result.error.message).toBe("Failed to reach Anthropic at https://api.anthropic.com");
+  });
+
+  it("is what the descriptor lists models with", () => {
+    expect(anthropicProviderDescriptor.listModels).toBe(listAnthropicModels);
   });
 });

@@ -32,7 +32,7 @@ cd your-project
 cortex
 ```
 
-That opens the full-screen terminal UI on the current folder. On first run, type `/provider`, pick a provider, and paste an API key (typed hidden, never shown or logged). Or run a single prompt without the UI:
+That opens the full-screen terminal UI on the current folder. On first run, type `/provider`, pick a provider, and paste an API key (typed hidden, never shown or logged). Cortex then asks the provider which models that key can use and lets you pick one from a menu, so you never have to know a model's exact name. Or run a single prompt without the UI:
 
 ```bash
 cortex -p "explain what src/index.ts does"     # the answer goes to stdout
@@ -60,7 +60,7 @@ cortex -p "explain what src/index.ts does"     # the answer goes to stdout
 | `/clear` | start a new conversation |
 | `/mode [name]` | show or set the permission mode |
 | `/agent [name]` | show or switch the agent: `scan`, `suggest`, `fix` (see [Security agents](#security-agents)), or `off` for the general agent |
-| `/provider [name]` | set up a provider's API key and model, and switch to it (`/provider remove <name>` forgets it) |
+| `/provider [name]` | set up a provider's API key, pick a model from the ones it offers, and switch to it (`/provider remove <name>` forgets it) |
 | `/model` | show the active model and provider |
 | `/theme [name]` | show or switch the color theme (`dark`, `light`, `mono`); remembered in `~/.cortex/preferences.json`, and `NO_COLOR` always forces `mono` |
 | `/exit` | exit |
@@ -139,8 +139,9 @@ Deny rules always win, even in `bypassPermissions`.
 
 <br>
 
-Run `cortex`, type `/provider`, pick a provider and answer two questions. The API key is typed hidden, and never shown, logged or added to the conversation. It is saved and used straight away, and remembered next time. If nothing is configured yet the app still opens and tells you to do this.
+Run `cortex`, type `/provider`, pick a provider and answer its question (the API key, or for Ollama the server URL). The API key is typed hidden, and never shown, logged or added to the conversation. It is saved and used straight away, and remembered next time. If nothing is configured yet the app still opens and tells you to do this.
 
+- **Choosing a model:** right after the key (or server URL), Cortex asks the provider what it offers and shows a menu: move with `↑` / `↓`, `enter` to pick. Anthropic lists the models the key can use (`GET /v1/models`); Google lists them too, keeping the ones that can chat; Ollama lists what you have pulled and hides models that can't call tools (such as embedding models). Pick `Other…` to type a name that isn't listed. If the list can't be had (offline, a wrong key or URL, a proxy without the endpoint) Cortex says why and asks you to type the model's name instead. The key is only ever sent to the provider it belongs to, and never appears in the message.
 - **Where:** `~/.cortex/credentials.json` in your home directory, never in the project, so it can't be committed. It is written readable by you only (on Windows it relies on your user profile's folder permissions) and it is **plain text**, so prefer an environment variable if that doesn't suit you.
 - **Precedence:** a set environment variable (`GOOGLE_API_KEY`, `CORTEX_PROVIDER`, …) beats what is saved, and the app tells you when one is overriding what you just entered. An empty variable counts as unset.
 - **Forgetting:** `/provider remove <name>` deletes a provider's saved settings; or delete the file.

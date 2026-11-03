@@ -53,6 +53,47 @@ export async function postJson<T>(opts: PostJsonOptions): Promise<Result<T>> {
   return ok((await response.value.json()) as T);
 }
 
+export interface GetJsonOptions {
+  /** Display name used in error messages, e.g. "Ollama". */
+  provider: string;
+  baseUrl: string;
+  url: string;
+  headers?: Record<string, string>;
+  signal?: AbortSignal;
+  /** Gives up after this long, so a server that never answers cannot hold a menu open. Defaults to 10 seconds. */
+  timeoutMs?: number;
+}
+
+const DEFAULT_GET_TIMEOUT_MS = 10_000;
+
+/**
+ * GETs JSON (used to list a provider's models) and folds every failure mode into a Result. The URL and headers never
+ * appear in an error, so an API key sent in a header cannot leak through one; a non-2xx reply is reported with its status and body.
+ */
+export async function getJson<T>(opts: GetJsonOptions): Promise<Result<T>> {
+  const timeout = AbortSignal.timeout(opts.timeoutMs ?? DEFAULT_GET_TIMEOUT_MS);
+  const signal = opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
+
+  let response: Response;
+  try {
+    response = await fetch(opts.url, { method: "GET", headers: opts.headers, signal });
+  } catch (error) {
+    if (timeout.aborted && !opts.signal?.aborted) {
+      return err(new ProviderRequestError(opts.provider, `${opts.provider} at ${opts.baseUrl} did not answer in time`, error));
+    }
+    return err(new ProviderRequestError(opts.provider, `Failed to reach ${opts.provider} at ${opts.baseUrl}`, error));
+  }
+
+  if (!response.ok) {
+    return err(new ProviderRequestError(opts.provider, `${opts.provider} returned ${response.status}: ${await response.text()}`));
+  }
+  try {
+    return ok((await response.json()) as T);
+  } catch (error) {
+    return err(new ProviderRequestError(opts.provider, `${opts.provider} sent a reply that is not valid JSON`, error));
+  }
+}
+
 /** POSTs a JSON body and returns the reply's body to be read as it arrives, with the same failures as `postJson`. */
 export async function postStream(opts: PostJsonOptions): Promise<Result<ReadableStream<Uint8Array>>> {
   const response = await post(opts);

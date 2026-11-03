@@ -10,6 +10,7 @@ export type {
   ChatRole,
   LLMProvider,
   LLMProviderDescriptor,
+  ModelInfo,
   StreamEvent,
   ToolCall,
   ToolSpec,

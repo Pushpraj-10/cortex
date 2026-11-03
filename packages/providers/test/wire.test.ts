@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ProviderRequestError, postJson, postStream, readLines, readSseData, streamInterrupted } from "../src/wire.js";
+import { ProviderRequestError, getJson, postJson, postStream, readLines, readSseData, streamInterrupted } from "../src/wire.js";
 import { collect, dribble, streamResponse } from "./support/stream-response.js";
 
 describe("ProviderRequestError", () => {
@@ -41,6 +41,85 @@ describe("postJson", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("nope", { status: 503 })));
     const result = await postJson(opts);
     expect(!result.ok && result.error.message).toBe("Test returned 503: nope");
+  });
+});
+
+describe("getJson", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const opts = { provider: "Test", baseUrl: "http://t", url: "http://t/models" };
+
+  /** A fetch that never answers on its own and fails the way the real one does when its signal aborts. */
+  const hangingFetch = () =>
+    vi.fn((_url: string, init: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => reject(new DOMException("The operation was aborted.", "AbortError")));
+      });
+    });
+
+  it("GETs with the given headers and returns the parsed reply", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: 1 })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await getJson<{ ok: number }>({ ...opts, headers: { "x-api-key": "k" } });
+
+    expect(result).toEqual({ ok: true, value: { ok: 1 } });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://t/models");
+    expect(init.method).toBe("GET");
+    expect(init.headers).toEqual({ "x-api-key": "k" });
+    expect(init.body).toBeUndefined();
+  });
+
+  it("folds a network failure into a ProviderRequestError naming the base URL", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
+    const result = await getJson(opts);
+    expect(!result.ok && result.error).toBeInstanceOf(ProviderRequestError);
+    expect(!result.ok && result.error.message).toBe("Failed to reach Test at http://t");
+  });
+
+  it("folds a non-2xx status into a ProviderRequestError with the status and body", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("bad key", { status: 401 })));
+    const result = await getJson(opts);
+    expect(!result.ok && result.error.message).toBe("Test returned 401: bad key");
+  });
+
+  it("folds a reply that is not JSON into a ProviderRequestError", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("<html>proxy</html>")));
+    const result = await getJson(opts);
+    expect(!result.ok && result.error.message).toBe("Test sent a reply that is not valid JSON");
+  });
+
+  it("gives up on a server that never answers, and says it was the wait", async () => {
+    vi.stubGlobal("fetch", hangingFetch());
+    const result = await getJson({ ...opts, timeoutMs: 20 });
+    expect(!result.ok && result.error.message).toBe("Test at http://t did not answer in time");
+  });
+
+  it("stops when the caller cancels, without calling that a timeout", async () => {
+    vi.stubGlobal("fetch", hangingFetch());
+    const controller = new AbortController();
+    const pending = getJson({ ...opts, signal: controller.signal });
+    controller.abort();
+    const result = await pending;
+    expect(!result.ok && result.error.message).toBe("Failed to reach Test at http://t");
+  });
+
+  it("never puts the headers, and so an API key, in an error", async () => {
+    const headers = { "x-api-key": "SECRET-KEY-123" };
+    for (const failing of [
+      vi.fn().mockRejectedValue(new Error("ECONNREFUSED")),
+      vi.fn().mockResolvedValue(new Response("nope", { status: 403 })),
+      vi.fn().mockResolvedValue(new Response("not json")),
+      hangingFetch(),
+    ]) {
+      vi.stubGlobal("fetch", failing);
+      const result = await getJson({ ...opts, headers, timeoutMs: 20 });
+      expect(result.ok).toBe(false);
+      expect(!result.ok && result.error.message).not.toContain("SECRET-KEY-123");
+    }
   });
 });
 

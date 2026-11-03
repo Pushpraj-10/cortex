@@ -3,8 +3,8 @@
  * Ollama's native /api/chat takes tool-call arguments as objects and needs no call ids.
  */
 import { err, ok, type Result } from "@cortex/core";
-import type { ChatMessage, ChatRequest, LLMProvider, LLMProviderDescriptor, StreamEvent, ToolCall, ToolSpec } from "./types.js";
-import { ProviderRequestError, postJson, postStream, readLines, streamInterrupted } from "./wire.js";
+import type { ChatMessage, ChatRequest, LLMProvider, LLMProviderDescriptor, ModelInfo, StreamEvent, ToolCall, ToolSpec } from "./types.js";
+import { ProviderRequestError, getJson, postJson, postStream, readLines, streamInterrupted } from "./wire.js";
 
 export interface OllamaConfig {
   /** Defaults to http://localhost:11434. */
@@ -168,9 +168,50 @@ export function createOllamaClient(config: OllamaConfig): LLMProvider {
   };
 }
 
+// ---- model listing ---------------------------------------------------------------
+
+interface OllamaTagsResponse {
+  models?: { name?: string }[];
+}
+
+interface OllamaShowResponse {
+  capabilities?: string[];
+}
+
+const LIST_TIMEOUT_MS = 10_000;
+
+/**
+ * Whether a pulled model can be the agent's model. Recent Ollama servers say what a model can do (`completion`, `tools`,
+ * `embedding`, ...) and the agent needs `tools`. An older server says nothing, and a failed lookup proves nothing, so
+ * both keep the model rather than hide one that works.
+ */
+async function supportsTools(baseUrl: string, name: string, signal: AbortSignal): Promise<boolean> {
+  const info = await postJson<OllamaShowResponse>({ provider: "Ollama", baseUrl, url: `${baseUrl}/api/show`, body: { model: name }, signal });
+  if (!info.ok || !Array.isArray(info.value.capabilities)) return true;
+  return info.value.capabilities.includes("tools");
+}
+
+/**
+ * Lists the models pulled on the server (no key is needed), keeping those that can call tools. Reaching the server is
+ * the only way this fails, which is also what tells the user a wrong URL or a stopped `ollama serve`.
+ */
+export async function listOllamaModels(config: Omit<OllamaConfig, "model">, signal?: AbortSignal): Promise<Result<ModelInfo[]>> {
+  const baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
+  const timeout = AbortSignal.timeout(LIST_TIMEOUT_MS);
+  const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
+
+  const tags = await getJson<OllamaTagsResponse>({ provider: "Ollama", baseUrl, url: `${baseUrl}/api/tags`, signal: combined });
+  if (!tags.ok) return tags;
+
+  const names = (tags.value.models ?? []).flatMap((model) => (model.name ? [model.name] : []));
+  const usable = await Promise.all(names.map((name) => supportsTools(baseUrl, name, combined)));
+  return ok(names.filter((_, index) => usable[index]).map((name) => ({ id: name })));
+}
+
 /** Not auto-registered; the composition root calls registerLlmProvider() explicitly. */
 export const ollamaProviderDescriptor: LLMProviderDescriptor<OllamaConfig> = {
   id: "ollama",
   displayName: "Ollama (local)",
   createClient: createOllamaClient,
+  listModels: listOllamaModels,
 };

@@ -8,8 +8,8 @@
  * inside a user turn; and `functionResponse.response` must be an object.
  */
 import { err, ok, type Result } from "@cortex/core";
-import type { ChatMessage, ChatRequest, LLMProvider, LLMProviderDescriptor, StreamEvent, ToolCall, ToolSpec } from "./types.js";
-import { ProviderRequestError, postJson, postStream, readSseData, streamInterrupted } from "./wire.js";
+import type { ChatMessage, ChatRequest, LLMProvider, LLMProviderDescriptor, ModelInfo, StreamEvent, ToolCall, ToolSpec } from "./types.js";
+import { ProviderRequestError, getJson, postJson, postStream, readSseData, streamInterrupted } from "./wire.js";
 
 export interface GoogleConfig {
   apiKey: string;
@@ -250,9 +250,59 @@ export function createGoogleClient(config: GoogleConfig): LLMProvider {
   };
 }
 
+// ---- model listing ---------------------------------------------------------------
+
+interface GoogleModelsPage {
+  models?: { name?: string; displayName?: string; supportedGenerationMethods?: string[] }[];
+  nextPageToken?: string;
+}
+
+/** Only stops a server that always returns another page from looping forever. */
+const MAX_MODEL_PAGES = 10;
+
+/**
+ * Models the agent cannot use even though they can answer `generateContent`: ones that make speech, pictures,
+ * audio or video, not text and tool calls. (Embedding and image-prediction models are already dropped because they
+ * do not support `generateContent`.)
+ */
+const NOT_FOR_CHAT = /(^|[-_])(tts|image|audio|imagen|veo|embedding|aqa)([-_]|$)/;
+
+/**
+ * Lists the models the key can use for chat. The API lists every model of every kind, so this keeps those that support
+ * `generateContent` and are not speech/image/video models. A bad key comes back as the API's own error. Google does not
+ * say which models support tool calls, so that is not filtered on.
+ */
+export async function listGoogleModels(config: Omit<GoogleConfig, "model">, signal?: AbortSignal): Promise<Result<ModelInfo[]>> {
+  const baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
+  const models: ModelInfo[] = [];
+
+  let pageToken: string | undefined;
+  for (let page = 0; page < MAX_MODEL_PAGES; page++) {
+    const query = new URLSearchParams({ pageSize: "1000", ...(pageToken ? { pageToken } : {}) });
+    const reply = await getJson<GoogleModelsPage>({
+      provider: "Google",
+      baseUrl,
+      url: `${baseUrl}/v1beta/models?${query}`,
+      headers: { "x-goog-api-key": config.apiKey },
+      signal,
+    });
+    if (!reply.ok) return reply;
+
+    for (const model of reply.value.models ?? []) {
+      const id = model.name?.replace(/^models\//, "");
+      if (!id || !model.supportedGenerationMethods?.includes("generateContent") || NOT_FOR_CHAT.test(id)) continue;
+      models.push(model.displayName ? { id, displayName: model.displayName } : { id });
+    }
+    if (!reply.value.nextPageToken) break;
+    pageToken = reply.value.nextPageToken;
+  }
+  return ok(models);
+}
+
 /** Not auto-registered; the composition root calls registerLlmProvider() explicitly. */
 export const googleProviderDescriptor: LLMProviderDescriptor<GoogleConfig> = {
   id: "google",
   displayName: "Google (cloud)",
   createClient: createGoogleClient,
+  listModels: listGoogleModels,
 };

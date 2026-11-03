@@ -100,7 +100,7 @@ describe("PermissionPrompt", () => {
 });
 
 describe("SetupPrompt", () => {
-  const draw = async (props: { error?: string }) =>
+  const draw = async (props: { error?: string; busy?: boolean }) =>
     (await renderFrame(<SetupPrompt title="Google Gemini" label="API key" hint="empty keeps the saved one" {...props} />, 80)).split("\n");
 
   it("asks the question and says what an empty answer does, in the rows it reserves and with no border", async () => {
@@ -115,6 +115,13 @@ describe("SetupPrompt", () => {
     const rows = await draw({ error: "That key looks too short" });
     expect(rows).toHaveLength(SETUP_PROMPT_ROWS);
     expect(rows[1]).toContain("That key looks too short");
+    expect(rows[1]).not.toContain("enter to confirm");
+  });
+
+  it("while waiting, offers only to cancel, since there is nothing to confirm", async () => {
+    const rows = await draw({ busy: true });
+    expect(rows).toHaveLength(SETUP_PROMPT_ROWS);
+    expect(rows[1]).toContain("empty keeps the saved one · esc to cancel");
     expect(rows[1]).not.toContain("enter to confirm");
   });
 });

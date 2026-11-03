@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { AgentModeId, AgentPolicy, AgentSession } from "@cortex/agent";
-import { ok } from "@cortex/core";
+import { CortexError, err, ok } from "@cortex/core";
 import { registerTool } from "@cortex/tools";
+import type { ProviderManager } from "../../src/provider/manager.js";
 import { createPermissionBridge } from "../../src/runtime/permission-bridge.js";
 import { slashCommands } from "../../src/ui/commands.js";
 import { KEY, driveApp, type DrivenApp } from "./support/drive-app.js";
@@ -705,5 +706,192 @@ describe("App: an API key never reaches the history, the screen or the agent", (
     await startAskingForGoogleKey(a);
     await a.type("@in");
     expect(a.screen()).not.toContain("src/index.ts");
+  });
+});
+
+describe("App: picking a model in /provider", () => {
+  const KEY_TEXT = "sk-model-secret-1234";
+  const models = [{ id: "gemini-pro", displayName: "Gemini Pro" }, { id: "gemini-flash" }, { id: "gemini-lite", displayName: "Gemini Lite" }];
+  const listing: ProviderManager["listModels"] = async () => ok(models);
+
+  /** Opens /provider, picks the provider at `position` in the picker (ollama, google, anthropic), and returns at its first question. */
+  async function openProvider(a: DrivenApp, position: number) {
+    await a.press("/provider");
+    await a.press(KEY.enter);
+    await a.press(KEY.enter);
+    for (let step = 0; step < position; step++) await a.press(KEY.down);
+    await a.press(KEY.enter);
+  }
+
+  /** Gets to the model step for Google: the key has been entered. */
+  async function enterGoogleKey(a: DrivenApp) {
+    await openProvider(a, 1);
+    expect(a.screen()).toContain("Google API key");
+    await a.press(KEY_TEXT);
+    await a.press(KEY.enter);
+  }
+
+  it("shows the models the provider offers as soon as the key is entered", async () => {
+    const a = await start({ listModels: listing });
+    await enterGoogleKey(a);
+
+    const screen = a.screen();
+    expect(screen).toContain("Found 3 models for Google Gemini");
+    for (const text of ["gemini-pro", "Gemini Pro", "gemini-flash", "gemini-lite", "Other…"]) expect(screen).toContain(text);
+    expect(screen).toContain("❯ gemini-pro");
+    expect(a.listed).toEqual([{ provider: "google", values: { apiKey: KEY_TEXT } }]);
+    expect(screen).not.toContain(KEY_TEXT);
+  });
+
+  it("saves the model picked with the arrow keys, and nothing else reaches the history or the agent", async () => {
+    const a = await start({ listModels: listing });
+    await enterGoogleKey(a);
+
+    await a.press(KEY.down);
+    expect(a.screen()).toContain("❯ gemini-flash");
+    await a.press(KEY.enter);
+
+    expect(a.configured).toEqual([{ provider: "google", values: { apiKey: KEY_TEXT, model: "gemini-flash" } }]);
+    expect(a.screen()).toContain("Now using Google Gemini (gemini-flash)");
+    expect(a.screen()).not.toContain(KEY_TEXT);
+    expect(a.remembered).toEqual(["/provider"]);
+    expect(a.sent).toEqual([]);
+  });
+
+  it("does not let the up arrow run off the top or the down arrow off the bottom", async () => {
+    const a = await start({ listModels: listing });
+    await enterGoogleKey(a);
+
+    await a.press(KEY.up);
+    expect(a.screen()).toContain("❯ gemini-pro");
+    for (let step = 0; step < 10; step++) await a.press(KEY.down);
+    expect(a.screen()).toContain("❯ Other…");
+  });
+
+  it("lets a model that is not listed be typed, through Other…", async () => {
+    const a = await start({ listModels: listing });
+    await enterGoogleKey(a);
+
+    for (let step = 0; step < models.length; step++) await a.press(KEY.down);
+    await a.press(KEY.enter);
+    expect(a.screen()).toContain("Model (for example");
+    await a.press("my-private-model");
+    await a.press(KEY.enter);
+
+    expect(a.configured).toEqual([{ provider: "google", values: { apiKey: KEY_TEXT, model: "my-private-model" } }]);
+  });
+
+  it("says why when the models cannot be listed, without the key, and asks for the name instead", async () => {
+    const a = await start({ listModels: async () => err(new CortexError("Google returned 400: API key not valid", "LLM_GOOGLE_REQUEST_FAILED")) });
+    await enterGoogleKey(a);
+
+    const screen = a.screen();
+    expect(screen).toContain("Could not list the models Google Gemini offers: Google returned 400: API key not valid");
+    expect(screen).toContain("Model (for example");
+    expect(screen).not.toContain(KEY_TEXT);
+
+    await a.press("gemini-x");
+    await a.press(KEY.enter);
+    expect(a.configured).toEqual([{ provider: "google", values: { apiKey: KEY_TEXT, model: "gemini-x" } }]);
+  });
+
+  it("asks for the name instead when the provider has no usable model to offer", async () => {
+    const a = await start({ listModels: async () => ok([]) });
+    await enterGoogleKey(a);
+
+    expect(a.screen()).toContain("did not list any models that can be used");
+    expect(a.screen()).toContain("Model (for example");
+  });
+
+  it("asks for the name instead if looking the models up throws", async () => {
+    const a = await start({
+      listModels: async () => {
+        throw new Error("boom");
+      },
+    });
+    await enterGoogleKey(a);
+
+    expect(a.screen()).toContain("Could not list the models Google Gemini offers: boom");
+    expect(a.screen()).toContain("Model (for example");
+  });
+
+  it("waits while the models are looked up, ignores typing, and drops a late answer after esc", async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const a = await start({
+      listModels: async () => {
+        await gate;
+        return ok(models);
+      },
+    });
+    await enterGoogleKey(a);
+
+    expect(a.screen()).toContain("looking up the models available");
+    expect(a.screen()).toContain("esc to cancel");
+    expect(a.screen()).not.toContain("enter to confirm");
+    await a.press("abc");
+    await a.press(KEY.enter);
+    expect(a.screen()).not.toContain("> abc");
+    expect(a.configured).toEqual([]);
+
+    await a.press(KEY.escape);
+    expect(a.screen()).toContain("Setup cancelled");
+    release();
+    await settle();
+    expect(a.screen()).not.toContain("gemini-pro");
+    expect(a.screen()).not.toContain("Found 3 models");
+    expect(a.configured).toEqual([]);
+  });
+
+  it("escape closes the model menu and saves nothing", async () => {
+    const a = await start({ listModels: listing });
+    await enterGoogleKey(a);
+
+    await a.press(KEY.escape);
+
+    expect(a.screen()).toContain("Setup cancelled");
+    expect(a.screen()).not.toContain("❯ gemini-pro");
+    expect(a.configured).toEqual([]);
+  });
+
+  it("draws a long list a screenful at a time and still reaches every model", async () => {
+    const many = Array.from({ length: 30 }, (_, index) => ({ id: `model-${String(index).padStart(2, "0")}` }));
+    const a = await start({ listModels: async () => ok(many) });
+    await enterGoogleKey(a);
+
+    expect(a.screen()).toContain("Found 30 models");
+    expect(a.screen()).toContain("❯ model-00");
+    expect(a.screen()).not.toContain("model-29");
+
+    for (let step = 0; step < 29; step++) await a.press(KEY.down);
+    expect(a.screen()).toContain("❯ model-29");
+    expect(a.screen()).not.toContain("model-00");
+    await a.press(KEY.enter);
+
+    expect(a.configured).toEqual([{ provider: "google", values: { apiKey: KEY_TEXT, model: "model-29" } }]);
+  });
+
+  it("asks Ollama for its server first, since that is what the models are listed from", async () => {
+    const a = await start({ listModels: async () => ok([{ id: "llama3.1" }, { id: "qwen3:4b" }]) });
+    await openProvider(a, 0);
+    expect(a.screen()).toContain("Server URL");
+
+    await a.press("http://gpu-box:11434");
+    await a.press(KEY.enter);
+
+    expect(a.listed).toEqual([{ provider: "ollama", values: { baseUrl: "http://gpu-box:11434" } }]);
+    expect(a.screen()).toContain("❯ llama3.1");
+    await a.press(KEY.down);
+    await a.press(KEY.enter);
+    expect(a.configured).toEqual([{ provider: "ollama", values: { baseUrl: "http://gpu-box:11434", model: "qwen3:4b" } }]);
+  });
+
+  it("lists Ollama's models with the default server when the URL is left blank", async () => {
+    const a = await start({ listModels: async () => ok([{ id: "llama3.1" }]) });
+    await openProvider(a, 0);
+    await a.press(KEY.enter);
+
+    expect(a.listed).toEqual([{ provider: "ollama", values: {} }]);
+    expect(a.screen()).toContain("Found 1 model for Ollama (local)");
   });
 });

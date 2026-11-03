@@ -3,6 +3,7 @@ import {
   buildOllamaRequest,
   createOllamaClient,
   fromOllamaToolCalls,
+  listOllamaModels,
   ollamaProviderDescriptor,
   toFunctionTools,
   toOllamaMessage,
@@ -379,5 +380,81 @@ describe("createOllamaClient chatStream", () => {
     vi.stubGlobal("fetch", fetchMock);
     await createOllamaClient({ model: "m" }).chat(request);
     expect(JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string).stream).toBe(false);
+  });
+});
+
+describe("listOllamaModels", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** A server with these models pulled; `capabilities` maps a name to what /api/show says about it (absent = the server says nothing). */
+  function server(names: string[], capabilities: Record<string, string[] | "fail"> = {}) {
+    return vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/api/tags")) return jsonResponse({ models: names.map((name) => ({ name })) });
+      const asked = JSON.parse(String(init?.body)).model as string;
+      const known = capabilities[asked];
+      if (known === "fail") return new Response("boom", { status: 500 });
+      return jsonResponse(known ? { capabilities: known } : {});
+    });
+  }
+
+  it("lists the pulled models from the default server", async () => {
+    const fetchMock = server(["llama3.1:8b", "qwen3:4b"], { "llama3.1:8b": ["completion", "tools"], "qwen3:4b": ["completion", "tools"] });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await listOllamaModels({});
+
+    expect(result).toEqual({ ok: true, value: [{ id: "llama3.1:8b" }, { id: "qwen3:4b" }] });
+    expect(fetchMock.mock.calls[0]![0]).toBe("http://localhost:11434/api/tags");
+    expect(fetchMock.mock.calls[0]![1]).toEqual(expect.objectContaining({ method: "GET" }));
+  });
+
+  it("uses a custom server URL", async () => {
+    const fetchMock = server(["m"]);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await listOllamaModels({ baseUrl: "http://gpu-box:11434" });
+
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual(["http://gpu-box:11434/api/tags", "http://gpu-box:11434/api/show"]);
+  });
+
+  it("hides models the server says cannot call tools, such as embedding models", async () => {
+    vi.stubGlobal(
+      "fetch",
+      server(["llama3.1", "nomic-embed-text", "old-chat"], {
+        "llama3.1": ["completion", "tools"],
+        "nomic-embed-text": ["embedding"],
+        "old-chat": ["completion"],
+      }),
+    );
+
+    const result = await listOllamaModels({});
+
+    expect(result.ok && result.value.map((m) => m.id)).toEqual(["llama3.1"]);
+  });
+
+  it("keeps a model when the server does not say what it can do, or the lookup fails", async () => {
+    vi.stubGlobal("fetch", server(["no-info", "lookup-failed"], { "lookup-failed": "fail" }));
+
+    const result = await listOllamaModels({});
+
+    expect(result.ok && result.value.map((m) => m.id)).toEqual(["no-info", "lookup-failed"]);
+  });
+
+  it("returns an empty list when nothing is pulled", async () => {
+    vi.stubGlobal("fetch", server([]));
+    expect(await listOllamaModels({})).toEqual({ ok: true, value: [] });
+  });
+
+  it("reports a server that cannot be reached, naming where it looked", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
+    const result = await listOllamaModels({ baseUrl: "http://nowhere:1" });
+    expect(!result.ok && result.error).toBeInstanceOf(ProviderRequestError);
+    expect(!result.ok && result.error.message).toBe("Failed to reach Ollama at http://nowhere:1");
+  });
+
+  it("is what the descriptor lists models with", () => {
+    expect(ollamaProviderDescriptor.listModels).toBe(listOllamaModels);
   });
 });
