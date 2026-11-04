@@ -12,6 +12,7 @@
     "dev": "tsx apps/cli/src/index.ts",
     "typecheck": "tsc --build",
     "build": "npm run build -w @cortex/cli",
+    "release": "npm run typecheck && npm test && npm run build && npm publish ./apps/cli/dist",
     "test": "vitest run",
     "test:packages": "npm test --workspaces --if-present",
     "test:e2e": "npm run test:e2e:agent && npm run test:e2e:cli && npm run test:e2e:context",
