@@ -1,0 +1,10 @@
+# Line endings: the repo stores LF and checks out LF on every platform.
+# Without this, Git for Windows (core.autocrlf=true) turns the working tree into
+# CRLF, tools that write LF leave files with mixed endings, and exact-string
+# edits that span a CRLF/LF boundary stop matching.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
